@@ -72,6 +72,166 @@ function setMascotPausedLS(v) {
   } catch {}
 }
 
+/* Animated Potato SVG — running, arm-waving, eye-tracking */
+function AnimatedPotato({ size = 130, walkPhase = 0, running = false, blink = 0, lookX = 0, lookY = 0, scared = false }) {
+  // Leg swing (alternating)
+  const legL = Math.sin(walkPhase) * (running ? 14 : 6);
+  const legR = Math.sin(walkPhase + Math.PI) * (running ? 14 : 6);
+  // Body bob (up-down as legs cycle)
+  const bob = Math.abs(Math.sin(walkPhase * 2)) * (running ? -6 : -2);
+  // Arm wave (out-of-phase with legs for natural running)
+  const armSwingL = Math.sin(walkPhase + Math.PI) * (running ? 14 : 5);
+  const armSwingR = Math.sin(walkPhase) * (running ? 14 : 5);
+  // Tilt forward when running
+  const tilt = running ? Math.sin(walkPhase * 0.5) * 4 - 2 : 0;
+  // Eye dimensions (blink squashes Y)
+  const eyeOpenness = 1 - blink * 0.95;
+
+  return (
+    <svg viewBox="0 0 200 240" width={size} height={size * 1.2} style={{
+      filter: scared
+        ? "drop-shadow(0 8px 16px rgba(255,90,90,0.4))"
+        : "drop-shadow(0 10px 28px rgba(232,184,74,0.45))",
+      overflow: "visible",
+    }}>
+      <defs>
+        <radialGradient id="potatoBody" cx="38%" cy="32%" r="78%">
+          <stop offset="0%" stopColor="#ffe070" />
+          <stop offset="45%" stopColor="#e8b450" />
+          <stop offset="100%" stopColor="#8a6020" />
+        </radialGradient>
+        <radialGradient id="armGrad" cx="35%" cy="30%" r="75%">
+          <stop offset="0%" stopColor="#ffd860" />
+          <stop offset="100%" stopColor="#a0701a" />
+        </radialGradient>
+        <radialGradient id="legGrad" cx="40%" cy="20%" r="80%">
+          <stop offset="0%" stopColor="#ffd860" />
+          <stop offset="100%" stopColor="#8a5a18" />
+        </radialGradient>
+      </defs>
+
+      {/* Ground shadow — gets smaller when "in air" (running peak) */}
+      <ellipse
+        cx="100"
+        cy="232"
+        rx={32 - Math.abs(bob) * 1.2}
+        ry="4"
+        fill="rgba(232, 184, 74, 0.35)"
+      />
+
+      <g transform={`translate(0 ${bob}) rotate(${tilt} 100 130)`}>
+        {/* LEFT LEG */}
+        <g transform={`translate(78 ${190 + legL})`}>
+          {/* Thigh */}
+          <ellipse cx="0" cy="-8" rx="9" ry="12" fill="url(#legGrad)" />
+          {/* Foot */}
+          <ellipse cx="0" cy="8" rx="11" ry="6" fill="#7a5018" />
+          <ellipse cx="0" cy="6" rx="9" ry="4" fill="#a07030" />
+        </g>
+        {/* RIGHT LEG */}
+        <g transform={`translate(122 ${190 + legR})`}>
+          <ellipse cx="0" cy="-8" rx="9" ry="12" fill="url(#legGrad)" />
+          <ellipse cx="0" cy="8" rx="11" ry="6" fill="#7a5018" />
+          <ellipse cx="0" cy="6" rx="9" ry="4" fill="#a07030" />
+        </g>
+
+        {/* LEFT ARM — swings opposite to left leg */}
+        <g transform={`translate(58 110) rotate(${armSwingL * -2})`}>
+          <ellipse cx="0" cy="20" rx="9" ry="22" fill="url(#armGrad)" />
+          {/* Hand */}
+          <circle cx="0" cy="42" r="11" fill="#ffd860" />
+          <circle cx="-3" cy="40" r="2" fill="#a07030" opacity="0.4" />
+          {/* Wrist band */}
+          <ellipse cx="0" cy="34" rx="9" ry="3" fill="#b88030" />
+        </g>
+        {/* RIGHT ARM */}
+        <g transform={`translate(142 110) rotate(${armSwingR * 2})`}>
+          <ellipse cx="0" cy="20" rx="9" ry="22" fill="url(#armGrad)" />
+          <circle cx="0" cy="42" r="11" fill="#ffd860" />
+          <circle cx="3" cy="40" r="2" fill="#a07030" opacity="0.4" />
+          <ellipse cx="0" cy="34" rx="9" ry="3" fill="#b88030" />
+        </g>
+
+        {/* BODY (potato) */}
+        <ellipse cx="100" cy="115" rx="55" ry="78" fill="url(#potatoBody)" />
+        {/* Body highlight */}
+        <ellipse cx="78" cy="80" rx="20" ry="28" fill="#fff" opacity="0.18" />
+        {/* Potato spots */}
+        <ellipse cx="75" cy="100" rx="3" ry="2" fill="#6a4818" opacity="0.5" />
+        <ellipse cx="125" cy="85" rx="2.5" ry="2" fill="#6a4818" opacity="0.45" />
+        <ellipse cx="95" cy="150" rx="3" ry="2" fill="#6a4818" opacity="0.45" />
+        <ellipse cx="125" cy="155" rx="2" ry="1.5" fill="#6a4818" opacity="0.4" />
+        <ellipse cx="60" cy="130" rx="2.5" ry="1.8" fill="#6a4818" opacity="0.4" />
+
+        {/* Sprout on top */}
+        <path d="M100 38 Q98 22 105 18" stroke="#5a3a18" strokeWidth="2.8" fill="none" strokeLinecap="round" />
+        <ellipse cx="108" cy="17" rx="5" ry="3" fill="#7a5028" transform="rotate(30 108 17)" />
+
+        {/* FACE — eyebrows */}
+        <path
+          d="M68 78 Q78 70 88 76"
+          stroke="#5a3a18"
+          strokeWidth="3"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <path
+          d="M112 76 Q122 70 132 78"
+          stroke="#5a3a18"
+          strokeWidth="3"
+          fill="none"
+          strokeLinecap="round"
+        />
+
+        {/* EYES — white background */}
+        <ellipse cx="80" cy="95" rx="13" ry={15 * eyeOpenness} fill="#fff" />
+        <ellipse cx="120" cy="95" rx="13" ry={15 * eyeOpenness} fill="#fff" />
+        {/* Pupils — tracking */}
+        {eyeOpenness > 0.1 && (
+          <>
+            <circle cx={80 + lookX * 4} cy={95 + lookY * 4} r="7" fill="#0a0604" />
+            <circle cx={120 + lookX * 4} cy={95 + lookY * 4} r="7" fill="#0a0604" />
+            {/* Sparkle highlights */}
+            <circle cx={77 + lookX * 4} cy={91 + lookY * 4} r="2.5" fill="#fff" />
+            <circle cx={117 + lookX * 4} cy={91 + lookY * 4} r="2.5" fill="#fff" />
+            <circle cx={83 + lookX * 4} cy={99 + lookY * 4} r="1.2" fill="#fff" />
+          </>
+        )}
+
+        {/* Cheek blush */}
+        <ellipse cx="60" cy="125" rx="8" ry="5" fill="#e85a4a" opacity="0.6" />
+        <ellipse cx="140" cy="125" rx="8" ry="5" fill="#e85a4a" opacity="0.6" />
+
+        {/* Mouth — open smile while running */}
+        {scared ? (
+          <ellipse cx="100" cy="142" rx="7" ry="9" fill="#3a1a08" />
+        ) : running ? (
+          <g>
+            <ellipse cx="100" cy="138" rx="14" ry="9" fill="#3a1a08" />
+            <ellipse cx="100" cy="142" rx="10" ry="4" fill="#e84a5a" />
+            {/* tongue */}
+            <ellipse cx="100" cy="146" rx="6" ry="2" fill="#ff8a8a" />
+          </g>
+        ) : (
+          <g>
+            <path d="M85 132 Q100 148 115 132" stroke="#3a1a08" strokeWidth="3" fill="#3a1a08" strokeLinecap="round" />
+            <ellipse cx="100" cy="138" rx="8" ry="4" fill="#e84a5a" />
+          </g>
+        )}
+      </g>
+
+      {/* Motion lines when running */}
+      {running && (
+        <g opacity="0.4">
+          <line x1="20" y1="120" x2="50" y2="120" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+          <line x1="15" y1="140" x2="40" y2="140" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+          <line x1="25" y1="160" x2="55" y2="160" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+        </g>
+      )}
+    </svg>
+  );
+}
+
 /* SVG Hammer for the smash animation */
 const HammerSVG = ({ size = 140 }) => (
   <svg viewBox="0 0 200 240" width={size} height={size * 1.2} style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.6))" }}>
@@ -115,6 +275,9 @@ export default function FloatingMascot({ onBonusUnlocked }) {
   const [showHammer, setShowHammer] = useState(false);
   const [impactRing, setImpactRing] = useState(0);
   const [crumbs, setCrumbs] = useState([]);
+  const [walkPhase, setWalkPhase] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [blink, setBlink] = useState(0);
 
   const posRef = useRef({ x: 0, y: 0 });
   const velRef = useRef({ vx: 0, vy: 0 });
@@ -130,6 +293,8 @@ export default function FloatingMascot({ onBonusUnlocked }) {
   const catchCountRef = useRef(0);
   const catchCooldownUntilRef = useRef(0);
   const postFirstCatchRef = useRef(false);
+  const walkRef = useRef(0);
+  const blinkRef = useRef({ next: Date.now() + 3000, until: 0 });
   const BASE_CATCH_RADIUS = 42;
 
   useEffect(() => {
@@ -514,6 +679,21 @@ export default function FloatingMascot({ onBonusUnlocked }) {
       if (velRef.current.vx > 0.3) facingRef.current = -1;
       else if (velRef.current.vx < -0.3) facingRef.current = 1;
       setFacing(facingRef.current);
+
+      // Walk/run animation phase — speed of leg cycle scales with movement speed
+      const moveSpeed = Math.hypot(velRef.current.vx, velRef.current.vy);
+      const isRunning = moveSpeed > 8;
+      walkRef.current += dt * (8 + moveSpeed * 0.8);
+      setWalkPhase(walkRef.current);
+      setRunning(isRunning);
+
+      // Blinking
+      if (nMs > blinkRef.current.next) {
+        blinkRef.current.until = nMs + 140;
+        blinkRef.current.next = nMs + 2500 + Math.random() * 3500;
+      }
+      setBlink(nMs < blinkRef.current.until ? 1 : 0);
+
       setBubbleSide(nx > vw - 240 ? "left" : "right");
       setPos({ x: nx, y: ny });
       raf = requestAnimationFrame(tick);
@@ -622,23 +802,33 @@ export default function FloatingMascot({ onBonusUnlocked }) {
             transition: "filter 0.2s",
           }}
         >
-          {/* The actual potato character */}
-          {phase !== "smashed" && (
-            <img
-              src="/mascot.png"
-              alt="IOTATO"
-              draggable={false}
-              style={{
-                width: 130,
-                height: "auto",
-                userSelect: "none",
-                filter:
-                  phase === "frozenStage1" || phase === "frozenStage2" || phase === "hammer"
-                    ? "drop-shadow(0 8px 16px rgba(255,90,90,0.4))"
-                    : "drop-shadow(0 8px 22px rgba(232,184,74,0.35))",
-              }}
-            />
-          )}
+          {/* The actual potato character — animated SVG */}
+          {phase !== "smashed" && (() => {
+            // Compute eye look direction (toward mouse)
+            const mx = mouseRef.current?.x ?? pos.x;
+            const my = mouseRef.current?.y ?? pos.y;
+            const dx = mx - pos.x;
+            const dy = my - pos.y;
+            const d = Math.hypot(dx, dy) || 1;
+            // The whole SVG is mirrored via scaleX(facing). To make eyes look at the
+            // real mouse position, we need to compensate: multiply lookX by facing.
+            // When facing=1 (looking left): lookX positive means mouse is right → eyes look right (correct)
+            // When facing=-1 (looking right, flipped): pre-flip we need to look "wrong way"
+            // so the flip restores correct visual direction → multiply by facing.
+            const lookX = (dx / d) * facing;
+            const lookY = dy / d;
+            return (
+              <AnimatedPotato
+                size={130}
+                walkPhase={walkPhase}
+                running={running}
+                blink={blink}
+                lookX={lookX}
+                lookY={lookY}
+                scared={phase === "frozenStage1" || phase === "frozenStage2" || phase === "hammer"}
+              />
+            );
+          })()}
           {phase === "smashed" && (
             <div
               style={{

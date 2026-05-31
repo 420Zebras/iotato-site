@@ -182,12 +182,19 @@ function Nav({ onConnectWallet }) {
    HERO
    ============================================================ */
 function Hero({ onPlayClick }) {
+  const [spinning, setSpinning] = useState(false);
+  const triggerSpin = () => {
+    if (spinning) return;
+    setSpinning(true);
+    setTimeout(() => setSpinning(false), 900);
+  };
   return (
     <section
       id="top"
       style={{
         position: "relative",
-        minHeight: "92vh",
+        minHeight: "100vh",
+        height: "100vh",
         display: "flex",
         alignItems: "center",
         overflow: "hidden",
@@ -201,18 +208,31 @@ function Hero({ onPlayClick }) {
           inset: 0,
           backgroundImage: "url(/hero-bg.jpg)",
           backgroundSize: "cover",
-          backgroundPosition: "center",
+          backgroundPosition: "center center",
           backgroundRepeat: "no-repeat",
         }}
       />
 
-      {/* Atmospheric overlays */}
+      {/* Atmospheric overlays — gentle at top, dramatic fade at bottom for smooth transition */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(ellipse 80% 60% at 30% 40%, rgba(232,184,74,0.08), transparent 60%), linear-gradient(180deg, rgba(6,16,10,0.35) 0%, rgba(6,16,10,0.15) 50%, rgba(6,16,10,0.85) 100%)",
+            "radial-gradient(ellipse 80% 60% at 30% 40%, rgba(232,184,74,0.08), transparent 60%), linear-gradient(180deg, rgba(6,16,10,0.25) 0%, rgba(6,16,10,0.05) 35%, rgba(6,16,10,0.15) 65%, rgba(6,16,10,0.85) 92%, rgba(6,16,10,1) 100%)",
+        }}
+      />
+
+      {/* Bottom transition feather — smooth blend into next section */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: "30%",
+          background: "linear-gradient(180deg, transparent 0%, rgba(6,16,10,0.7) 50%, var(--bg-0) 100%)",
+          pointerEvents: "none",
         }}
       />
 
@@ -375,6 +395,8 @@ function Hero({ onPlayClick }) {
             <img
               src="/iotato-coin.jpg"
               alt="IOTATO coin"
+              onClick={triggerSpin}
+              title="Click me!"
               style={{
                 position: "relative",
                 width: "min(380px, 80vw)",
@@ -382,8 +404,14 @@ function Hero({ onPlayClick }) {
                 borderRadius: "50%",
                 boxShadow:
                   "0 24px 80px rgba(232,184,74,0.3), 0 8px 32px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(232,184,74,0.4)",
-                animation: "float 6s ease-in-out infinite",
+                animation: spinning ? "coinSpin 0.9s cubic-bezier(0.4, 0, 0.2, 1), float 6s ease-in-out infinite" : "float 6s ease-in-out infinite",
+                cursor: "pointer",
+                userSelect: "none",
+                transition: "filter 0.2s",
               }}
+              onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
+              draggable={false}
             />
             {/* Orbit dots */}
             {[0, 1, 2, 3].map((i) => {
@@ -927,7 +955,7 @@ function VideosSection() {
       <div className="container">
         <div style={{ maxWidth: 600, marginBottom: "3rem" }}>
           <div className="eyebrow">Watch & learn</div>
-          <h2 className="section-title">IOTA Video Vault</h2>
+          <h2 className="section-title">IOTATO Video Vault</h2>
           <p className="section-lead">Videos about IOTA, TWIN, TokenLabs, and real-world adoption. More coming.</p>
         </div>
 
