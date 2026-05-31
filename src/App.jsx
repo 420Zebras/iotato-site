@@ -707,8 +707,22 @@ function HowToBuy() {
    ============================================================ */
 function GameSection({ gameRef, submitScore, personalBest }) {
   return (
-    <section ref={gameRef} id="game" className="section" style={{ paddingTop: "5rem" }}>
-      <div className="container">
+    <section ref={gameRef} id="game" className="section" style={{ paddingTop: "4rem", position: "relative" }}>
+      {/* Soft teal glow accent behind the game */}
+      <div
+        style={{
+          position: "absolute",
+          top: "10%",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "80%",
+          height: "60%",
+          background: "radial-gradient(ellipse 50% 50% at 50% 50%, rgba(79,214,196,0.08), transparent 70%)",
+          pointerEvents: "none",
+          filter: "blur(40px)",
+        }}
+      />
+      <div className="container" style={{ position: "relative" }}>
         <div style={{ maxWidth: 600, marginBottom: "2.5rem" }}>
           <div className="eyebrow">Mini game</div>
           <h2 className="section-title">Potato Dodge</h2>

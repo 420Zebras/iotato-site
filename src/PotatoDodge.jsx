@@ -6,6 +6,13 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
    slow-mo, streak multiplier, boss enrage phase, juice.
    ============================================================ */
 
+/* Preload the real logo images so gems show the authentic IOTA & TokenLabs marks.
+   Drawn into circular clips in drawGem(). */
+const iotaImg = typeof Image !== "undefined" ? new Image() : null;
+const tlnImg = typeof Image !== "undefined" ? new Image() : null;
+if (iotaImg) iotaImg.src = "/iota-logo.png";
+if (tlnImg) tlnImg.src = "/tokenlabs.jpg";
+
 /* Bonus ammo: unlocked by smashing the floating mascot on the website.
    Grants +2 starting ammo. Stored in localStorage by FloatingMascot. */
 const BONUS_AMMO_KEY = "iotato_bonus_ammo_claimed";
@@ -209,19 +216,6 @@ function drawPlayer(ctx, p) {
   }
   ctx.restore();
 }
-/* IOTA logo dots pattern — drawn inside the gem for IOTA tokens */
-/* IOTA logo — stylized clean version: three flowing rows of dots that
-   grow then shrink, evoking the official IOTA "network" mark. Coordinates
-   are in a -10..10 space, scaled to the gem size. [x, y, radius] */
-const IOTA_DOTS = [
-  // top arc (left → right, dots grow toward center-right)
-  [-8.5, -6.5, 1.0], [-5.5, -7.2, 1.3], [-2.0, -7.0, 1.6], [1.5, -6.3, 2.0], [5.0, -5.2, 1.5], [8.0, -6.0, 1.1],
-  // middle arc (the prominent sweeping row)
-  [-9.0, -1.0, 1.2], [-5.5, -1.5, 1.7], [-1.5, -1.2, 2.2], [2.5, -0.5, 1.8], [6.0, 0.2, 1.4], [9.0, -0.8, 1.0],
-  // bottom arc
-  [-7.5, 4.5, 1.1], [-3.5, 5.2, 1.5], [0.5, 5.5, 1.9], [4.5, 5.0, 1.4], [7.5, 4.2, 1.0],
-];
-
 function drawGem(ctx, label, color, size) {
   const r = size / 2;
   // Outer glow
@@ -231,7 +225,7 @@ function drawGem(ctx, label, color, size) {
   ctx.fill();
 
   if (label === "IOTA") {
-    // IOTA coin: deep dark disc with clean white dot constellation
+    // Dark disc base
     const g = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 1, 0, 0, r);
     g.addColorStop(0, "#14201c");
     g.addColorStop(0.7, "#070d0b");
@@ -240,77 +234,40 @@ function drawGem(ctx, label, color, size) {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
-    // Bright teal rim (double for clarity)
+    // Draw the real IOTA logo image, clipped to the circle
+    if (iotaImg && iotaImg.complete && iotaImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, r - 1, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(iotaImg, -r, -r, size, size);
+      ctx.restore();
+    }
+    // Bright teal rim
     ctx.strokeStyle = color;
     ctx.lineWidth = 2.5;
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,0.25)";
-    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(0, 0, r - 2, 0, Math.PI * 2);
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
-    // White dots — clean constellation
-    const dotScale = size / 26;
-    ctx.fillStyle = "#fff";
-    for (const [dx, dy, dr] of IOTA_DOTS) {
-      ctx.beginPath();
-      ctx.arc(dx * dotScale, dy * dotScale, dr * dotScale, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // Highlight sheen
-    ctx.fillStyle = "rgba(255,255,255,0.07)";
-    ctx.beginPath();
-    ctx.ellipse(-r * 0.35, -r * 0.4, r * 0.35, r * 0.5, -0.4, 0, Math.PI * 2);
-    ctx.fill();
   } else {
-    // TokenLabs coin: blue with flask
-    const g = ctx.createRadialGradient(-3, -3, 1, 0, 0, r);
-    g.addColorStop(0, "#3a6dff");
-    g.addColorStop(0.6, "#1a3ef5");
-    g.addColorStop(1, "#0a1f8a");
-    ctx.fillStyle = g;
+    // TokenLabs coin — use the real TokenLabs image, clipped to circle
+    ctx.fillStyle = "#1a3ef5";
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
+    if (tlnImg && tlnImg.complete && tlnImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, r - 1, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(tlnImg, -r, -r, size, size);
+      ctx.restore();
+    }
     ctx.strokeStyle = "#a0c4ff";
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
-    // Inner ring (subtle)
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 0.72, 0, Math.PI * 2);
-    ctx.stroke();
-    // Flask shape (centered)
-    const fs = size / 36;
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    // Flask body
-    ctx.moveTo(-2 * fs, -5 * fs);
-    ctx.lineTo(2 * fs, -5 * fs);
-    ctx.lineTo(2 * fs, -1 * fs);
-    ctx.lineTo(5 * fs, 5 * fs);
-    ctx.quadraticCurveTo(5.5 * fs, 6.5 * fs, 4 * fs, 6.5 * fs);
-    ctx.lineTo(-4 * fs, 6.5 * fs);
-    ctx.quadraticCurveTo(-5.5 * fs, 6.5 * fs, -5 * fs, 5 * fs);
-    ctx.lineTo(-2 * fs, -1 * fs);
-    ctx.closePath();
-    ctx.fill();
-    // Flask rim/lip
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(-3 * fs, -5 * fs);
-    ctx.lineTo(3 * fs, -5 * fs);
-    ctx.stroke();
-    // Bubbles above flask
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(0, -7.5 * fs, 1.2 * fs, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(2 * fs, -8.5 * fs, 0.7 * fs, 0, Math.PI * 2);
-    ctx.fill();
   }
 }
 function drawCoin(ctx, size) {

@@ -79,12 +79,6 @@ function setMascotPausedLS(v) {
    built for animation (legs, arms, eyes, blink, expressions).
    ============================================================ */
 function IotatoCharacter({ size = 130, walkPhase = 0, running = false, blink = 0, lookX = 0, lookY = 0, scared = false }) {
-  // Legs: alternating swing, bigger when running
-  const legAmp = running ? 16 : 5;
-  const legL = Math.sin(walkPhase) * legAmp;
-  const legR = Math.sin(walkPhase + Math.PI) * legAmp;
-  const legLLift = running ? Math.max(0, Math.sin(walkPhase)) * 7 : 0;
-  const legRLift = running ? Math.max(0, Math.sin(walkPhase + Math.PI)) * 7 : 0;
   // Body bob synced to stride
   const bob = Math.abs(Math.sin(walkPhase)) * (running ? -6 : -2);
   // Arms swing opposite to legs
@@ -114,15 +108,41 @@ function IotatoCharacter({ size = 130, walkPhase = 0, running = false, blink = 0
       </defs>
 
       <g transform={`translate(0 ${bob}) rotate(${lean} 110 120)`}>
-        {/* ---- LEGS (behind body) ---- */}
-        <g transform={`translate(90 ${168 - legLLift}) rotate(${legL * 0.4})`}>
-          <ellipse cx="0" cy="6" rx="12" ry="8" fill="url(#ioLimb)" stroke="#5e4020" strokeWidth="1.5" />
-        </g>
-        <g transform={`translate(130 ${168 - legRLift}) rotate(${legR * 0.4})`}>
-          <ellipse cx="0" cy="6" rx="12" ry="8" fill="url(#ioLimb)" stroke="#5e4020" strokeWidth="1.5" />
-        </g>
+        {/* ---- LEGS — proper running cycle (thigh + lower leg + foot) ---- */}
+        {(() => {
+          // Each leg cycles through a run motion: forward reach → push back
+          const renderLeg = (hipX, phaseOff) => {
+            const ph = walkPhase + phaseOff;
+            // Hip swings the whole leg forward/back
+            const hipAngle = Math.sin(ph) * (running ? 38 : 14);
+            // Knee bends most when leg is lifting/forward
+            const kneeBend = running ? Math.max(0, Math.sin(ph + 0.5)) * 45 + 10 : Math.max(0, Math.sin(ph)) * 16 + 4;
+            const thighLen = 16;
+            const shinLen = 16;
+            return (
+              <g transform={`translate(${hipX} 158)`} key={hipX}>
+                <g transform={`rotate(${hipAngle})`}>
+                  {/* Thigh */}
+                  <rect x="-5" y="0" width="10" height={thighLen} rx="5" fill="url(#ioLimb)" stroke="#5e4020" strokeWidth="1.2" />
+                  <g transform={`translate(0 ${thighLen}) rotate(${kneeBend})`}>
+                    {/* Shin */}
+                    <rect x="-4.5" y="0" width="9" height={shinLen} rx="4.5" fill="url(#ioLimb)" stroke="#5e4020" strokeWidth="1.2" />
+                    {/* Foot */}
+                    <ellipse cx="2" cy={shinLen + 2} rx="9" ry="5.5" fill="url(#ioLimb)" stroke="#5e4020" strokeWidth="1.3" />
+                  </g>
+                </g>
+              </g>
+            );
+          };
+          return (
+            <>
+              {renderLeg(98, Math.PI)}
+              {renderLeg(122, 0)}
+            </>
+          );
+        })()}
 
-        {/* ---- ARMS (behind body) ---- */}
+        {/* ---- ARMS (simple, behind body) ---- */}
         {/* Left arm */}
         <g transform={`translate(64 96) rotate(${-30 + armL})`}>
           <path d="M0 0 Q-16 -6 -28 -18" stroke="url(#ioLimb)" strokeWidth="8" fill="none" strokeLinecap="round" />
@@ -697,6 +717,10 @@ export default function FloatingMascot({ onBonusUnlocked }) {
       return n;
     });
   };
+
+  // On mobile / touch devices there is no cursor to dodge, so the mascot
+  // doesn't make sense — disable it entirely.
+  if (isMobile) return null;
 
   if (!ready || phase === "hidden") {
     // Even when hidden, show the pause toggle so user knows mascot exists
