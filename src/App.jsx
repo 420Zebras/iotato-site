@@ -182,11 +182,9 @@ function Nav({ onConnectWallet }) {
    HERO
    ============================================================ */
 function Hero({ onPlayClick }) {
-  const [spinning, setSpinning] = useState(false);
+  const [rotation, setRotation] = useState(0);
   const triggerSpin = () => {
-    if (spinning) return;
-    setSpinning(true);
-    setTimeout(() => setSpinning(false), 900);
+    setRotation((r) => r + 360);
   };
   return (
     <section
@@ -194,44 +192,44 @@ function Hero({ onPlayClick }) {
       style={{
         position: "relative",
         minHeight: "100vh",
-        height: "100vh",
         display: "flex",
         alignItems: "center",
         overflow: "hidden",
         paddingTop: "4.5rem",
+        paddingBottom: "2rem",
       }}
     >
-      {/* Hero background image */}
+      {/* Hero background image — positioned to fill and favor the cute potato at bottom-left */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           backgroundImage: "url(/hero-bg.jpg)",
           backgroundSize: "cover",
-          backgroundPosition: "center center",
+          backgroundPosition: "center 65%",
           backgroundRepeat: "no-repeat",
         }}
       />
 
-      {/* Atmospheric overlays — gentle at top, dramatic fade at bottom for smooth transition */}
+      {/* Atmospheric overlays — gentle top, NO heavy darkening at bottom (let image breathe) */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(ellipse 80% 60% at 30% 40%, rgba(232,184,74,0.08), transparent 60%), linear-gradient(180deg, rgba(6,16,10,0.25) 0%, rgba(6,16,10,0.05) 35%, rgba(6,16,10,0.15) 65%, rgba(6,16,10,0.85) 92%, rgba(6,16,10,1) 100%)",
+            "radial-gradient(ellipse 80% 60% at 30% 40%, rgba(232,184,74,0.08), transparent 60%), linear-gradient(180deg, rgba(6,16,10,0.25) 0%, rgba(6,16,10,0.05) 40%, rgba(6,16,10,0.0) 75%, rgba(6,16,10,0.55) 100%)",
         }}
       />
 
-      {/* Bottom transition feather — smooth blend into next section */}
+      {/* Bottom transition — very subtle feather only in last 10% so image stays visible */}
       <div
         style={{
           position: "absolute",
           left: 0,
           right: 0,
           bottom: 0,
-          height: "30%",
-          background: "linear-gradient(180deg, transparent 0%, rgba(6,16,10,0.7) 50%, var(--bg-0) 100%)",
+          height: "12%",
+          background: "linear-gradient(180deg, transparent 0%, var(--bg-0) 100%)",
           pointerEvents: "none",
         }}
       />
@@ -392,27 +390,69 @@ function Hero({ onPlayClick }) {
                 animation: "glowPulse 4s ease-in-out infinite",
               }}
             />
-            <img
-              src="/iotato-coin.jpg"
-              alt="IOTATO coin"
+            {/* 3D Flip Coin */}
+            <div
               onClick={triggerSpin}
               title="Click me!"
               style={{
                 position: "relative",
                 width: "min(380px, 80vw)",
-                height: "auto",
-                borderRadius: "50%",
-                boxShadow:
-                  "0 24px 80px rgba(232,184,74,0.3), 0 8px 32px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(232,184,74,0.4)",
-                animation: spinning ? "coinSpin 0.9s cubic-bezier(0.4, 0, 0.2, 1), float 6s ease-in-out infinite" : "float 6s ease-in-out infinite",
+                aspectRatio: "1 / 1",
                 cursor: "pointer",
+                perspective: "1400px",
+                animation: "float 6s ease-in-out infinite",
                 userSelect: "none",
-                transition: "filter 0.2s",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.filter = "brightness(1)"; }}
-              draggable={false}
-            />
+              onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(1.08)")}
+              onMouseLeave={(e) => (e.currentTarget.style.filter = "brightness(1)")}
+            >
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: "100%",
+                  transformStyle: "preserve-3d",
+                  transform: `rotateY(${rotation}deg)`,
+                  transition: "transform 0.95s cubic-bezier(0.45, 0.05, 0.25, 1)",
+                }}
+              >
+                {/* Front */}
+                <img
+                  src="/iotato-coin.jpg"
+                  alt="IOTATO coin"
+                  draggable={false}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: "50%",
+                    backfaceVisibility: "hidden",
+                    WebkitBackfaceVisibility: "hidden",
+                    boxShadow:
+                      "0 24px 80px rgba(232,184,74,0.3), 0 8px 32px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(232,184,74,0.4)",
+                  }}
+                />
+                {/* Back */}
+                <img
+                  src="/iotato-coin-back.jpg"
+                  alt="IOTATO coin back"
+                  draggable={false}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: "50%",
+                    backfaceVisibility: "hidden",
+                    WebkitBackfaceVisibility: "hidden",
+                    transform: "rotateY(180deg)",
+                    boxShadow:
+                      "0 24px 80px rgba(232,184,74,0.3), 0 8px 32px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(232,184,74,0.4)",
+                  }}
+                />
+              </div>
+            </div>
             {/* Orbit dots */}
             {[0, 1, 2, 3].map((i) => {
               const angle = (i / 4) * Math.PI * 2;
@@ -520,7 +560,7 @@ function CAStrip() {
     setTimeout(() => setCopied(false), 1800);
   };
   return (
-    <div style={{ padding: "0 1.5rem", marginTop: "-2rem", position: "relative", zIndex: 5 }}>
+    <div style={{ padding: "0 1.5rem", marginTop: "1.5rem", marginBottom: "1.5rem", position: "relative", zIndex: 5 }}>
       <div className="container">
         <div
           style={{
