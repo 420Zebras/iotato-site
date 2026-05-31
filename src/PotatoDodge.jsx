@@ -6,6 +6,18 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
    slow-mo, streak multiplier, boss enrage phase, juice.
    ============================================================ */
 
+/* Bonus ammo: unlocked by smashing the floating mascot on the website.
+   Grants +2 starting ammo. Stored in localStorage by FloatingMascot. */
+const BONUS_AMMO_KEY = "iotato_bonus_ammo_claimed";
+const BONUS_AMMO_AMOUNT = 2;
+function getBonusAmmo() {
+  try {
+    return localStorage.getItem(BONUS_AMMO_KEY) === "1" ? BONUS_AMMO_AMOUNT : 0;
+  } catch {
+    return 0;
+  }
+}
+
 const C = {
   iota: "#4fd6c4",
   tln: "#7aa8ff",
@@ -587,6 +599,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
   const canvasRef = useRef(null);
   const [running, setRunning] = useState(false);
   const [over, setOver] = useState(false);
+  const bonusActive = getBonusAmmo() > 0;
   const [hud, setHud] = useState({
     score: 0,
     lives: 3,
@@ -685,7 +698,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       levelFlash: 0,
       tierUpFlash: 0,
       perfectFlash: 0,
-      ammo: 3,
+      ammo: 3 + getBonusAmmo(),
     }),
     [],
   );
@@ -1872,9 +1885,30 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
                 💥 <b>Charge</b> hold, then release
               </span>
             </div>
-            <button onClick={start} style={{ ...btnPrimary, padding: "12px 32px", borderRadius: 999, fontSize: 16 }}>
-              Start Game
-            </button>
+            {bonusActive && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 16px",
+                  borderRadius: 999,
+                  background: "linear-gradient(90deg, rgba(232,184,74,0.18), rgba(111,191,115,0.12))",
+                  border: "1px solid rgba(232,184,74,0.5)",
+                  color: "#e8b84a",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  marginBottom: 16,
+                }}
+              >
+                🥔 Secret bonus active: +2 starting ammo
+              </div>
+            )}
+            <div>
+              <button onClick={start} style={{ ...btnPrimary, padding: "12px 32px", borderRadius: 999, fontSize: 16 }}>
+                Start Game
+              </button>
+            </div>
           </Overlay>
         )}
         {over && (

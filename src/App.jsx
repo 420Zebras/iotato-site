@@ -184,7 +184,7 @@ function Nav({ onConnectWallet }) {
 function Hero({ onPlayClick }) {
   const [rotation, setRotation] = useState(0);
   const triggerSpin = () => {
-    setRotation((r) => r + 360);
+    setRotation((r) => r + 180);
   };
   return (
     <section
@@ -1395,7 +1395,7 @@ export default function App() {
               {bonusToast === "first" ? "Secret found!" : "Already unlocked"}
             </div>
             <div style={{ fontSize: 13, opacity: 0.9 }}>
-              {bonusToast === "first" ? "+1 starting ammo unlocked for next run" : "Nice swing, ser 🥔"}
+              {bonusToast === "first" ? "+2 starting ammo unlocked for next run" : "Nice swing, ser 🥔"}
             </div>
           </div>
         </div>

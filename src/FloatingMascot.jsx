@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 /* ============================================================
    FLOATING MASCOT — the IOTATO potato that wanders around
    the website, dodges your cursor, and gets smashed by a
-   hammer after you catch it twice → +1 starting ammo unlock.
+   hammer after you catch it twice → +2 starting ammo unlock.
    ============================================================ */
 
 const PHRASES = [
@@ -74,6 +74,181 @@ function setMascotPausedLS(v) {
 
 /* Animated Potato SVG — running, arm-waving, eye-tracking */
 /* SVG Hammer for the smash animation */
+/* ============================================================
+   IOTATO CHARACTER — detailed SVG recreation of the mascot,
+   built for animation (legs, arms, eyes, blink, expressions).
+   ============================================================ */
+function IotatoCharacter({ size = 130, walkPhase = 0, running = false, blink = 0, lookX = 0, lookY = 0, scared = false }) {
+  // Legs: alternating swing, bigger when running
+  const legAmp = running ? 16 : 5;
+  const legL = Math.sin(walkPhase) * legAmp;
+  const legR = Math.sin(walkPhase + Math.PI) * legAmp;
+  const legLLift = running ? Math.max(0, Math.sin(walkPhase)) * 8 : 0;
+  const legRLift = running ? Math.max(0, Math.sin(walkPhase + Math.PI)) * 8 : 0;
+  // Body bob synced to stride
+  const bob = Math.abs(Math.sin(walkPhase)) * (running ? -7 : -2);
+  // Arms swing opposite to legs
+  const armL = Math.sin(walkPhase + Math.PI) * (running ? 22 : 6);
+  const armR = Math.sin(walkPhase) * (running ? 22 : 6);
+  // Lean forward when running
+  const lean = running ? 4 : 0;
+  // Eye openness (blink)
+  const eo = 1 - blink * 0.92;
+  // Pupil offset (look toward cursor)
+  const px = lookX * 3.5;
+  const py = lookY * 3.5;
+
+  return (
+    <svg viewBox="0 0 220 260" width={size} height={size * (260 / 220)} style={{ overflow: "visible", display: "block" }}>
+      <defs>
+        <radialGradient id="ioBody" cx="38%" cy="30%" r="75%">
+          <stop offset="0%" stopColor="#ffe98a" />
+          <stop offset="45%" stopColor="#f0c040" />
+          <stop offset="100%" stopColor="#9a6c1e" />
+        </radialGradient>
+        <radialGradient id="ioBody2" cx="38%" cy="30%" r="78%">
+          <stop offset="0%" stopColor="#ffec96" />
+          <stop offset="45%" stopColor="#edbb3e" />
+          <stop offset="100%" stopColor="#8f6418" />
+        </radialGradient>
+        <radialGradient id="ioLimb" cx="35%" cy="30%" r="75%">
+          <stop offset="0%" stopColor="#ffe085" />
+          <stop offset="100%" stopColor="#b07e22" />
+        </radialGradient>
+        <radialGradient id="ioEye" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stopColor="#3a2a1a" />
+          <stop offset="100%" stopColor="#000" />
+        </radialGradient>
+      </defs>
+
+      {/* Ground shadow */}
+      <ellipse cx="110" cy="250" rx={42 - Math.abs(bob) * 1.5} ry="6" fill="rgba(232,184,74,0.3)" />
+
+      <g transform={`translate(0 ${bob}) rotate(${lean} 110 140)`}>
+        {/* ---- LEGS (behind body) ---- */}
+        <g transform={`translate(88 ${205 - legLLift}) rotate(${legL * 0.4})`}>
+          <ellipse cx="0" cy="6" rx="13" ry="9" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1.5" />
+        </g>
+        <g transform={`translate(132 ${205 - legRLift}) rotate(${legR * 0.4})`}>
+          <ellipse cx="0" cy="6" rx="13" ry="9" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1.5" />
+        </g>
+
+        {/* ---- ARMS (behind body) ---- */}
+        {/* Left arm */}
+        <g transform={`translate(62 120) rotate(${-35 + armL})`}>
+          <path d="M0 0 Q-18 -8 -30 -22" stroke="url(#ioLimb)" strokeWidth="9" fill="none" strokeLinecap="round" />
+          {/* wrist band */}
+          <circle cx="-28" cy="-20" r="6" fill="#c08828" />
+          {/* hand (4-finger glove) */}
+          <g transform="translate(-32 -24)">
+            <ellipse cx="0" cy="0" rx="9" ry="10" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1.2" />
+            <ellipse cx="-5" cy="-7" rx="2.5" ry="5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(-20 -5 -7)" />
+            <ellipse cx="0" cy="-9" rx="2.5" ry="5.5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" />
+            <ellipse cx="5" cy="-8" rx="2.5" ry="5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(20 5 -8)" />
+            <ellipse cx="-8" cy="2" rx="2.2" ry="4" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(-50 -8 2)" />
+          </g>
+        </g>
+        {/* Right arm */}
+        <g transform={`translate(158 120) rotate(${35 + armR})`}>
+          <path d="M0 0 Q18 -8 30 -22" stroke="url(#ioLimb)" strokeWidth="9" fill="none" strokeLinecap="round" />
+          <circle cx="28" cy="-20" r="6" fill="#c08828" />
+          <g transform="translate(32 -24)">
+            <ellipse cx="0" cy="0" rx="9" ry="10" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1.2" />
+            <ellipse cx="5" cy="-7" rx="2.5" ry="5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(20 5 -7)" />
+            <ellipse cx="0" cy="-9" rx="2.5" ry="5.5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" />
+            <ellipse cx="-5" cy="-8" rx="2.5" ry="5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(-20 -5 -8)" />
+            <ellipse cx="8" cy="2" rx="2.2" ry="4" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(50 8 2)" />
+          </g>
+        </g>
+
+        {/* ---- BODY (pear/teardrop shape) ---- */}
+        <path
+          d="M110 38
+             C 86 38, 68 62, 64 96
+             C 60 130, 56 162, 64 192
+             C 72 222, 92 236, 110 236
+             C 128 236, 148 222, 156 192
+             C 164 162, 160 130, 156 96
+             C 152 62, 134 38, 110 38 Z"
+          fill="url(#ioBody2)"
+          stroke="#7a5418"
+          strokeWidth="2"
+        />
+        {/* Highlight top-left */}
+        <ellipse cx="86" cy="86" rx="20" ry="30" fill="#fff" opacity="0.22" />
+        {/* Potato speckles */}
+        <g fill="#7a5418" opacity="0.5">
+          <ellipse cx="84" cy="120" rx="2.5" ry="1.8" />
+          <ellipse cx="138" cy="110" rx="2" ry="1.5" />
+          <ellipse cx="100" cy="175" rx="2.5" ry="1.8" />
+          <ellipse cx="132" cy="180" rx="2" ry="1.5" />
+          <ellipse cx="72" cy="150" rx="2" ry="1.5" />
+          <ellipse cx="120" cy="200" rx="2.2" ry="1.6" />
+          <ellipse cx="92" cy="205" rx="1.8" ry="1.3" />
+        </g>
+
+        {/* ---- SPROUT ---- */}
+        <path d="M110 40 Q106 22 116 14" stroke="#8a5a28" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+        <ellipse cx="120" cy="13" rx="7" ry="4" fill="#a06f2a" transform="rotate(32 120 13)" />
+
+        {/* ---- EYEBROWS ---- */}
+        <path d={`M82 ${88 + py * 0.3} Q92 ${82 + py * 0.3} 100 ${87 + py * 0.3}`} stroke="#5a3a14" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+        <path d={`M120 ${87 + py * 0.3} Q128 ${82 + py * 0.3} 138 ${88 + py * 0.3}`} stroke="#5a3a14" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+
+        {/* ---- EYES ---- */}
+        {/* Left eye */}
+        <ellipse cx="92" cy="106" rx="13" ry={15 * eo} fill="url(#ioEye)" stroke="#2a1a0a" strokeWidth="1" />
+        {/* Right eye */}
+        <ellipse cx="128" cy="106" rx="13" ry={15 * eo} fill="url(#ioEye)" stroke="#2a1a0a" strokeWidth="1" />
+        {eo > 0.15 && (
+          <>
+            {/* Big highlight */}
+            <circle cx={88 + px} cy={101 + py} r="4" fill="#fff" />
+            <circle cx={124 + px} cy={101 + py} r="4" fill="#fff" />
+            {/* Small highlight */}
+            <circle cx={96 + px} cy={110 + py} r="1.8" fill="#fff" opacity="0.85" />
+            <circle cx={132 + px} cy={110 + py} r="1.8" fill="#fff" opacity="0.85" />
+          </>
+        )}
+
+        {/* ---- CHEEKS ---- */}
+        <ellipse cx="70" cy="125" rx="9" ry="6" fill="#ff5a4a" opacity="0.7" />
+        <ellipse cx="150" cy="125" rx="9" ry="6" fill="#ff5a4a" opacity="0.7" />
+
+        {/* ---- MOUTH ---- */}
+        {scared ? (
+          <ellipse cx="110" cy="142" rx="8" ry="11" fill="#3a1408" stroke="#2a0e04" strokeWidth="1.5" />
+        ) : (
+          <g>
+            {/* open happy mouth */}
+            <path
+              d={running
+                ? "M92 134 Q110 158 128 134 Q120 150 110 150 Q100 150 92 134 Z"
+                : "M94 134 Q110 152 126 134 Q118 146 110 146 Q102 146 94 134 Z"}
+              fill="#3a1408"
+              stroke="#2a0e04"
+              strokeWidth="1.5"
+            />
+            {/* teeth */}
+            <path d="M97 134 Q110 138 123 134 L121 137 Q110 140 99 137 Z" fill="#fff" />
+            {/* tongue */}
+            <ellipse cx="110" cy={running ? 147 : 143} rx="7" ry={running ? 5 : 3} fill="#ff5a5a" />
+          </g>
+        )}
+      </g>
+
+      {/* Speed lines when running */}
+      {running && (
+        <g opacity="0.45">
+          <line x1="14" y1="120" x2="44" y2="120" stroke="#ffe98a" strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="8" y1="142" x2="36" y2="142" stroke="#ffe98a" strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="18" y1="164" x2="48" y2="164" stroke="#ffe98a" strokeWidth="2.5" strokeLinecap="round" />
+        </g>
+      )}
+    </svg>
+  );
+}
+
 const HammerSVG = ({ size = 140 }) => (
   <svg viewBox="0 0 200 240" width={size} height={size * 1.2} style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.6))" }}>
     <defs>
@@ -309,7 +484,7 @@ export default function FloatingMascot({ onBonusUnlocked }) {
         if (onBonusUnlocked) onBonusUnlocked(unl);
         setTimeout(() => {
           setShowHammer(false);
-          setBubble(unl ? "you got me… +1 ammo next run" : "you got me… again");
+          setBubble(unl ? "you got me… +2 ammo next run" : "you got me… again");
           if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
           bubbleTimerRef.current = setTimeout(() => setBubble(null), 3000);
         }, 900);
@@ -643,35 +818,34 @@ export default function FloatingMascot({ onBonusUnlocked }) {
             transition: "filter 0.2s",
           }}
         >
-          {/* The actual potato character — real IOTATO logo with motion-aware CSS animations */}
+          {/* The IOTATO character — detailed animated SVG */}
           {phase !== "smashed" && (() => {
-            // Animation strength scales with movement
             const moveSpeed = Math.hypot(velRef.current.vx, velRef.current.vy);
-            const speedFactor = Math.min(1, moveSpeed / 25);
-            // Tilt: slight side-to-side rocking when running
-            const tilt = Math.sin(walkPhase * 1.2) * 8 * speedFactor;
-            // Bob: up-down hop while moving
-            const bob = -Math.abs(Math.sin(walkPhase * 1.5)) * 8 * speedFactor;
-            // Squash/stretch
-            const squashY = 1 - 0.04 * speedFactor;
-            const squashX = 1 + 0.04 * speedFactor;
-            // Subtle motion blur on the image when running fast
-            const blurAmt = speedFactor > 0.5 ? speedFactor * 1.5 : 0;
+            const speedFactor = Math.min(1, moveSpeed / 22);
+            const isRun = speedFactor > 0.35;
             const scared = phase === "frozenStage1" || phase === "frozenStage2" || phase === "hammer";
+            // Eye tracking toward cursor (compensate for facing flip)
+            const mx = mouseRef.current?.x ?? pos.x;
+            const my = mouseRef.current?.y ?? pos.y;
+            const dxe = mx - pos.x;
+            const dye = my - pos.y;
+            const de = Math.hypot(dxe, dye) || 1;
+            const lookX = (dxe / de) * facing;
+            const lookY = dye / de;
             return (
               <div style={{ position: "relative", display: "inline-block" }}>
-                {/* Dust cloud particles when running fast */}
+                {/* Dust clouds when running */}
                 {speedFactor > 0.4 && (
                   <>
                     <span
                       style={{
                         position: "absolute",
-                        bottom: -4,
-                        left: facing > 0 ? "85%" : "10%",
+                        bottom: -2,
+                        left: facing > 0 ? "78%" : "8%",
                         width: 18,
                         height: 18,
                         borderRadius: "50%",
-                        background: "radial-gradient(circle, rgba(200,180,140,0.55), transparent 70%)",
+                        background: "radial-gradient(circle, rgba(210,190,150,0.5), transparent 70%)",
                         animation: "dustPuff 0.5s ease-out infinite",
                         pointerEvents: "none",
                       }}
@@ -679,64 +853,27 @@ export default function FloatingMascot({ onBonusUnlocked }) {
                     <span
                       style={{
                         position: "absolute",
-                        bottom: -2,
-                        left: facing > 0 ? "75%" : "20%",
+                        bottom: 0,
+                        left: facing > 0 ? "68%" : "18%",
                         width: 12,
                         height: 12,
                         borderRadius: "50%",
-                        background: "radial-gradient(circle, rgba(200,180,140,0.4), transparent 70%)",
+                        background: "radial-gradient(circle, rgba(210,190,150,0.38), transparent 70%)",
                         animation: "dustPuff 0.65s ease-out infinite 0.15s",
                         pointerEvents: "none",
                       }}
                     />
                   </>
                 )}
-                <img
-                  src="/mascot.png"
-                  alt="IOTATO"
-                  draggable={false}
-                  style={{
-                    width: 120,
-                    height: "auto",
-                    userSelect: "none",
-                    display: "block",
-                    transform: `translateY(${bob}px) rotate(${tilt}deg) scale(${squashX}, ${squashY})`,
-                    transformOrigin: "center bottom",
-                    filter: scared
-                      ? `drop-shadow(0 8px 16px rgba(255,90,90,0.5)) blur(${blurAmt}px)`
-                      : `drop-shadow(0 12px 28px rgba(232,184,74,0.45)) blur(${blurAmt}px)`,
-                    transition: "filter 0.2s",
-                  }}
+                <IotatoCharacter
+                  size={132}
+                  walkPhase={walkPhase}
+                  running={isRun}
+                  blink={blink}
+                  lookX={lookX}
+                  lookY={lookY}
+                  scared={scared}
                 />
-                {/* Speed lines when running */}
-                {speedFactor > 0.6 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "30%",
-                      [facing > 0 ? "right" : "left"]: "100%",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
-                      pointerEvents: "none",
-                    }}
-                  >
-                    {[20, 28, 16].map((w, i) => (
-                      <span
-                        key={i}
-                        style={{
-                          display: "block",
-                          width: w,
-                          height: 2,
-                          background: "linear-gradient(90deg, transparent, rgba(255,235,180,0.75))",
-                          borderRadius: 2,
-                          opacity: speedFactor * 0.9,
-                          animation: `speedline 0.4s linear infinite ${i * 0.08}s`,
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
               </div>
             );
           })()}
