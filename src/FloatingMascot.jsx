@@ -83,10 +83,10 @@ function IotatoCharacter({ size = 130, walkPhase = 0, running = false, blink = 0
   const legAmp = running ? 16 : 5;
   const legL = Math.sin(walkPhase) * legAmp;
   const legR = Math.sin(walkPhase + Math.PI) * legAmp;
-  const legLLift = running ? Math.max(0, Math.sin(walkPhase)) * 8 : 0;
-  const legRLift = running ? Math.max(0, Math.sin(walkPhase + Math.PI)) * 8 : 0;
+  const legLLift = running ? Math.max(0, Math.sin(walkPhase)) * 7 : 0;
+  const legRLift = running ? Math.max(0, Math.sin(walkPhase + Math.PI)) * 7 : 0;
   // Body bob synced to stride
-  const bob = Math.abs(Math.sin(walkPhase)) * (running ? -7 : -2);
+  const bob = Math.abs(Math.sin(walkPhase)) * (running ? -6 : -2);
   // Arms swing opposite to legs
   const armL = Math.sin(walkPhase + Math.PI) * (running ? 22 : 6);
   const armR = Math.sin(walkPhase) * (running ? 22 : 6);
@@ -94,155 +94,127 @@ function IotatoCharacter({ size = 130, walkPhase = 0, running = false, blink = 0
   const lean = running ? 4 : 0;
   // Eye openness (blink)
   const eo = 1 - blink * 0.92;
-  // Pupil offset (look toward cursor)
-  const px = lookX * 3.5;
-  const py = lookY * 3.5;
+  // Pupil offset (look toward cursor) — larger range so tracking is clearly visible
+  const px = lookX * 6;
+  const py = lookY * 5;
 
   return (
-    <svg viewBox="0 0 220 260" width={size} height={size * (260 / 220)} style={{ overflow: "visible", display: "block" }}>
+    <svg viewBox="0 0 220 200" width={size} height={size * (200 / 220)} style={{ overflow: "visible", display: "block" }}>
       <defs>
-        <radialGradient id="ioBody" cx="38%" cy="30%" r="75%">
-          <stop offset="0%" stopColor="#ffe98a" />
-          <stop offset="45%" stopColor="#f0c040" />
-          <stop offset="100%" stopColor="#9a6c1e" />
+        {/* Natural earthy potato tones */}
+        <radialGradient id="ioBody2" cx="40%" cy="32%" r="72%">
+          <stop offset="0%" stopColor="#e8c89a" />
+          <stop offset="45%" stopColor="#c69a63" />
+          <stop offset="100%" stopColor="#8a6038" />
         </radialGradient>
-        <radialGradient id="ioBody2" cx="38%" cy="30%" r="78%">
-          <stop offset="0%" stopColor="#ffec96" />
-          <stop offset="45%" stopColor="#edbb3e" />
-          <stop offset="100%" stopColor="#8f6418" />
-        </radialGradient>
-        <radialGradient id="ioLimb" cx="35%" cy="30%" r="75%">
-          <stop offset="0%" stopColor="#ffe085" />
-          <stop offset="100%" stopColor="#b07e22" />
-        </radialGradient>
-        <radialGradient id="ioEye" cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stopColor="#3a2a1a" />
-          <stop offset="100%" stopColor="#000" />
+        <radialGradient id="ioLimb" cx="38%" cy="32%" r="72%">
+          <stop offset="0%" stopColor="#d8b483" />
+          <stop offset="100%" stopColor="#7a5028" />
         </radialGradient>
       </defs>
 
-      {/* Ground shadow */}
-      <ellipse cx="110" cy="250" rx={42 - Math.abs(bob) * 1.5} ry="6" fill="rgba(232,184,74,0.3)" />
-
-      <g transform={`translate(0 ${bob}) rotate(${lean} 110 140)`}>
+      <g transform={`translate(0 ${bob}) rotate(${lean} 110 120)`}>
         {/* ---- LEGS (behind body) ---- */}
-        <g transform={`translate(88 ${205 - legLLift}) rotate(${legL * 0.4})`}>
-          <ellipse cx="0" cy="6" rx="13" ry="9" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1.5" />
+        <g transform={`translate(90 ${168 - legLLift}) rotate(${legL * 0.4})`}>
+          <ellipse cx="0" cy="6" rx="12" ry="8" fill="url(#ioLimb)" stroke="#5e4020" strokeWidth="1.5" />
         </g>
-        <g transform={`translate(132 ${205 - legRLift}) rotate(${legR * 0.4})`}>
-          <ellipse cx="0" cy="6" rx="13" ry="9" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1.5" />
+        <g transform={`translate(130 ${168 - legRLift}) rotate(${legR * 0.4})`}>
+          <ellipse cx="0" cy="6" rx="12" ry="8" fill="url(#ioLimb)" stroke="#5e4020" strokeWidth="1.5" />
         </g>
 
         {/* ---- ARMS (behind body) ---- */}
         {/* Left arm */}
-        <g transform={`translate(62 120) rotate(${-35 + armL})`}>
-          <path d="M0 0 Q-18 -8 -30 -22" stroke="url(#ioLimb)" strokeWidth="9" fill="none" strokeLinecap="round" />
-          {/* wrist band */}
-          <circle cx="-28" cy="-20" r="6" fill="#c08828" />
-          {/* hand (4-finger glove) */}
-          <g transform="translate(-32 -24)">
-            <ellipse cx="0" cy="0" rx="9" ry="10" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1.2" />
-            <ellipse cx="-5" cy="-7" rx="2.5" ry="5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(-20 -5 -7)" />
-            <ellipse cx="0" cy="-9" rx="2.5" ry="5.5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" />
-            <ellipse cx="5" cy="-8" rx="2.5" ry="5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(20 5 -8)" />
-            <ellipse cx="-8" cy="2" rx="2.2" ry="4" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(-50 -8 2)" />
-          </g>
+        <g transform={`translate(64 96) rotate(${-30 + armL})`}>
+          <path d="M0 0 Q-16 -6 -28 -18" stroke="url(#ioLimb)" strokeWidth="8" fill="none" strokeLinecap="round" />
+          <ellipse cx="-30" cy="-20" rx="8" ry="9" fill="url(#ioLimb)" stroke="#5e4020" strokeWidth="1.2" />
         </g>
         {/* Right arm */}
-        <g transform={`translate(158 120) rotate(${35 + armR})`}>
-          <path d="M0 0 Q18 -8 30 -22" stroke="url(#ioLimb)" strokeWidth="9" fill="none" strokeLinecap="round" />
-          <circle cx="28" cy="-20" r="6" fill="#c08828" />
-          <g transform="translate(32 -24)">
-            <ellipse cx="0" cy="0" rx="9" ry="10" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1.2" />
-            <ellipse cx="5" cy="-7" rx="2.5" ry="5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(20 5 -7)" />
-            <ellipse cx="0" cy="-9" rx="2.5" ry="5.5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" />
-            <ellipse cx="-5" cy="-8" rx="2.5" ry="5" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(-20 -5 -8)" />
-            <ellipse cx="8" cy="2" rx="2.2" ry="4" fill="url(#ioLimb)" stroke="#7a5418" strokeWidth="1" transform="rotate(50 8 2)" />
-          </g>
+        <g transform={`translate(156 96) rotate(${30 + armR})`}>
+          <path d="M0 0 Q16 -6 28 -18" stroke="url(#ioLimb)" strokeWidth="8" fill="none" strokeLinecap="round" />
+          <ellipse cx="30" cy="-20" rx="8" ry="9" fill="url(#ioLimb)" stroke="#5e4020" strokeWidth="1.2" />
         </g>
 
-        {/* ---- BODY (pear/teardrop shape) ---- */}
+        {/* ---- BODY (natural rounded potato — wider than tall) ---- */}
         <path
-          d="M110 38
-             C 86 38, 68 62, 64 96
-             C 60 130, 56 162, 64 192
-             C 72 222, 92 236, 110 236
-             C 128 236, 148 222, 156 192
-             C 164 162, 160 130, 156 96
-             C 152 62, 134 38, 110 38 Z"
+          d="M110 40
+             C 78 40, 52 56, 48 86
+             C 44 116, 58 158, 88 168
+             C 100 172, 120 172, 132 168
+             C 162 158, 176 116, 172 86
+             C 168 56, 142 40, 110 40 Z"
           fill="url(#ioBody2)"
-          stroke="#7a5418"
+          stroke="#6e4a26"
           strokeWidth="2"
         />
         {/* Highlight top-left */}
-        <ellipse cx="86" cy="86" rx="20" ry="30" fill="#fff" opacity="0.22" />
-        {/* Potato speckles */}
-        <g fill="#7a5418" opacity="0.5">
-          <ellipse cx="84" cy="120" rx="2.5" ry="1.8" />
-          <ellipse cx="138" cy="110" rx="2" ry="1.5" />
-          <ellipse cx="100" cy="175" rx="2.5" ry="1.8" />
-          <ellipse cx="132" cy="180" rx="2" ry="1.5" />
-          <ellipse cx="72" cy="150" rx="2" ry="1.5" />
-          <ellipse cx="120" cy="200" rx="2.2" ry="1.6" />
-          <ellipse cx="92" cy="205" rx="1.8" ry="1.3" />
+        <ellipse cx="84" cy="74" rx="22" ry="20" fill="#fff" opacity="0.18" />
+        {/* Potato eyes/speckles (natural dimples) */}
+        <g fill="#6e4a26" opacity="0.45">
+          <ellipse cx="72" cy="110" rx="2.5" ry="1.8" />
+          <ellipse cx="150" cy="100" rx="2" ry="1.5" />
+          <ellipse cx="95" cy="150" rx="2.5" ry="1.8" />
+          <ellipse cx="140" cy="148" rx="2" ry="1.5" />
+          <ellipse cx="60" cy="130" rx="2" ry="1.5" />
+          <ellipse cx="160" cy="128" rx="1.8" ry="1.3" />
+          <ellipse cx="115" cy="158" rx="2" ry="1.4" />
         </g>
+        {/* small natural dimple shading lines */}
+        <path d="M70 108 q2 2 4 0" stroke="#6e4a26" strokeWidth="0.8" fill="none" opacity="0.4" />
+        <path d="M148 98 q2 2 4 0" stroke="#6e4a26" strokeWidth="0.8" fill="none" opacity="0.4" />
 
         {/* ---- SPROUT ---- */}
-        <path d="M110 40 Q106 22 116 14" stroke="#8a5a28" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-        <ellipse cx="120" cy="13" rx="7" ry="4" fill="#a06f2a" transform="rotate(32 120 13)" />
+        <path d="M110 42 Q107 26 116 18" stroke="#6e7a3a" strokeWidth="3" fill="none" strokeLinecap="round" />
+        <ellipse cx="119" cy="17" rx="6" ry="3.5" fill="#7e9040" transform="rotate(32 119 17)" />
 
         {/* ---- EYEBROWS ---- */}
-        <path d={`M82 ${88 + py * 0.3} Q92 ${82 + py * 0.3} 100 ${87 + py * 0.3}`} stroke="#5a3a14" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-        <path d={`M120 ${87 + py * 0.3} Q128 ${82 + py * 0.3} 138 ${88 + py * 0.3}`} stroke="#5a3a14" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+        <path d={`M80 ${86 + py * 0.3} Q90 ${81 + py * 0.3} 99 ${85 + py * 0.3}`} stroke="#4a3216" strokeWidth="3" fill="none" strokeLinecap="round" />
+        <path d={`M121 ${85 + py * 0.3} Q130 ${81 + py * 0.3} 140 ${86 + py * 0.3}`} stroke="#4a3216" strokeWidth="3" fill="none" strokeLinecap="round" />
 
-        {/* ---- EYES ---- */}
-        {/* Left eye */}
-        <ellipse cx="92" cy="106" rx="13" ry={15 * eo} fill="url(#ioEye)" stroke="#2a1a0a" strokeWidth="1" />
-        {/* Right eye */}
-        <ellipse cx="128" cy="106" rx="13" ry={15 * eo} fill="url(#ioEye)" stroke="#2a1a0a" strokeWidth="1" />
+        {/* ---- EYES — big white sclera so the dark pupil tracker is clearly visible ---- */}
+        {/* Left eye white */}
+        <ellipse cx="92" cy="104" rx="15" ry={17 * eo} fill="#fff" stroke="#4a3216" strokeWidth="1.5" />
+        {/* Right eye white */}
+        <ellipse cx="128" cy="104" rx="15" ry={17 * eo} fill="#fff" stroke="#4a3216" strokeWidth="1.5" />
         {eo > 0.15 && (
           <>
-            {/* Big highlight */}
-            <circle cx={88 + px} cy={101 + py} r="4" fill="#fff" />
-            <circle cx={124 + px} cy={101 + py} r="4" fill="#fff" />
-            {/* Small highlight */}
-            <circle cx={96 + px} cy={110 + py} r="1.8" fill="#fff" opacity="0.85" />
-            <circle cx={132 + px} cy={110 + py} r="1.8" fill="#fff" opacity="0.85" />
+            {/* Dark pupils that track the cursor — clearly visible on white */}
+            <circle cx={92 + px} cy={104 + py} r="7.5" fill="#1a0f06" />
+            <circle cx={128 + px} cy={104 + py} r="7.5" fill="#1a0f06" />
+            {/* Highlights on pupils */}
+            <circle cx={89 + px} cy={101 + py} r="2.5" fill="#fff" />
+            <circle cx={125 + px} cy={101 + py} r="2.5" fill="#fff" />
           </>
         )}
 
         {/* ---- CHEEKS ---- */}
-        <ellipse cx="70" cy="125" rx="9" ry="6" fill="#ff5a4a" opacity="0.7" />
-        <ellipse cx="150" cy="125" rx="9" ry="6" fill="#ff5a4a" opacity="0.7" />
+        <ellipse cx="68" cy="122" rx="8" ry="5" fill="#e8836a" opacity="0.55" />
+        <ellipse cx="152" cy="122" rx="8" ry="5" fill="#e8836a" opacity="0.55" />
 
         {/* ---- MOUTH ---- */}
         {scared ? (
-          <ellipse cx="110" cy="142" rx="8" ry="11" fill="#3a1408" stroke="#2a0e04" strokeWidth="1.5" />
+          <ellipse cx="110" cy="136" rx="7" ry="10" fill="#3a1408" stroke="#2a0e04" strokeWidth="1.5" />
         ) : (
           <g>
-            {/* open happy mouth */}
             <path
               d={running
-                ? "M92 134 Q110 158 128 134 Q120 150 110 150 Q100 150 92 134 Z"
-                : "M94 134 Q110 152 126 134 Q118 146 110 146 Q102 146 94 134 Z"}
+                ? "M94 128 Q110 150 126 128 Q118 142 110 142 Q102 142 94 128 Z"
+                : "M96 128 Q110 144 124 128 Q116 138 110 138 Q104 138 96 128 Z"}
               fill="#3a1408"
               stroke="#2a0e04"
               strokeWidth="1.5"
             />
-            {/* teeth */}
-            <path d="M97 134 Q110 138 123 134 L121 137 Q110 140 99 137 Z" fill="#fff" />
-            {/* tongue */}
-            <ellipse cx="110" cy={running ? 147 : 143} rx="7" ry={running ? 5 : 3} fill="#ff5a5a" />
+            <path d="M99 128 Q110 132 121 128 L119 131 Q110 134 101 131 Z" fill="#fff" />
+            <ellipse cx="110" cy={running ? 139 : 135} rx="6" ry={running ? 4 : 2.5} fill="#e8676a" />
           </g>
         )}
       </g>
 
       {/* Speed lines when running */}
       {running && (
-        <g opacity="0.45">
-          <line x1="14" y1="120" x2="44" y2="120" stroke="#ffe98a" strokeWidth="2.5" strokeLinecap="round" />
-          <line x1="8" y1="142" x2="36" y2="142" stroke="#ffe98a" strokeWidth="2.5" strokeLinecap="round" />
-          <line x1="18" y1="164" x2="48" y2="164" stroke="#ffe98a" strokeWidth="2.5" strokeLinecap="round" />
+        <g opacity="0.4">
+          <line x1="14" y1="100" x2="42" y2="100" stroke="#d8b483" strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="8" y1="120" x2="34" y2="120" stroke="#d8b483" strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="18" y1="140" x2="46" y2="140" stroke="#d8b483" strokeWidth="2.5" strokeLinecap="round" />
         </g>
       )}
     </svg>

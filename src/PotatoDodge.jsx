@@ -210,12 +210,16 @@ function drawPlayer(ctx, p) {
   ctx.restore();
 }
 /* IOTA logo dots pattern — drawn inside the gem for IOTA tokens */
+/* IOTA logo — stylized clean version: three flowing rows of dots that
+   grow then shrink, evoking the official IOTA "network" mark. Coordinates
+   are in a -10..10 space, scaled to the gem size. [x, y, radius] */
 const IOTA_DOTS = [
-  [-9, -7, 1.5], [-6, -10, 1], [-3, -8, 0.7], [3, -10, 1.2], [6, -7, 0.8],
-  [-10, -3, 1.3], [-6, -4, 0.9], [-2, -2, 0.7], [2, -3, 0.8], [7, -4, 1.1], [10, -2, 0.7],
-  [-8, 1, 1], [-4, 2, 1.3], [0, 0, 1.2], [4, 1, 0.9], [8, 2, 1.1],
-  [-9, 5, 1.1], [-5, 7, 0.9], [-1, 5, 1.4], [3, 6, 0.8], [7, 7, 1], [10, 5, 0.7],
-  [-6, 10, 1], [-2, 9, 0.8], [2, 11, 1.1], [6, 10, 0.9],
+  // top arc (left → right, dots grow toward center-right)
+  [-8.5, -6.5, 1.0], [-5.5, -7.2, 1.3], [-2.0, -7.0, 1.6], [1.5, -6.3, 2.0], [5.0, -5.2, 1.5], [8.0, -6.0, 1.1],
+  // middle arc (the prominent sweeping row)
+  [-9.0, -1.0, 1.2], [-5.5, -1.5, 1.7], [-1.5, -1.2, 2.2], [2.5, -0.5, 1.8], [6.0, 0.2, 1.4], [9.0, -0.8, 1.0],
+  // bottom arc
+  [-7.5, 4.5, 1.1], [-3.5, 5.2, 1.5], [0.5, 5.5, 1.9], [4.5, 5.0, 1.4], [7.5, 4.2, 1.0],
 ];
 
 function drawGem(ctx, label, color, size) {
@@ -227,31 +231,36 @@ function drawGem(ctx, label, color, size) {
   ctx.fill();
 
   if (label === "IOTA") {
-    // IOTA coin: black/dark circle with white dot swirl pattern
-    const g = ctx.createRadialGradient(-3, -3, 1, 0, 0, r);
-    g.addColorStop(0, "#0e1815");
-    g.addColorStop(0.7, "#050a09");
+    // IOTA coin: deep dark disc with clean white dot constellation
+    const g = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 1, 0, 0, r);
+    g.addColorStop(0, "#14201c");
+    g.addColorStop(0.7, "#070d0b");
     g.addColorStop(1, "#000");
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
-    // Teal rim
+    // Bright teal rim (double for clarity)
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
-    // White dots (scaled relative to gem size)
-    const dotScale = size / 30;
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 2, 0, Math.PI * 2);
+    ctx.stroke();
+    // White dots — clean constellation
+    const dotScale = size / 26;
     ctx.fillStyle = "#fff";
     for (const [dx, dy, dr] of IOTA_DOTS) {
       ctx.beginPath();
-      ctx.arc(dx * dotScale * 0.9, dy * dotScale * 0.9, dr * dotScale * 0.85, 0, Math.PI * 2);
+      ctx.arc(dx * dotScale, dy * dotScale, dr * dotScale, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Subtle highlight
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    // Highlight sheen
+    ctx.fillStyle = "rgba(255,255,255,0.07)";
     ctx.beginPath();
-    ctx.ellipse(-r * 0.35, -r * 0.4, r * 0.4, r * 0.55, -0.4, 0, Math.PI * 2);
+    ctx.ellipse(-r * 0.35, -r * 0.4, r * 0.35, r * 0.5, -0.4, 0, Math.PI * 2);
     ctx.fill();
   } else {
     // TokenLabs coin: blue with flask
@@ -1248,7 +1257,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             s.slowMo = 0.35;
             s.perfectFlash = 1;
             s.score += 30 * moonM;
-            s.ammo = Math.min(ammoMax, s.ammo + 1);
             addT(s, p.x, p.y - 40, "PERFECT!", "#4fd6c4", true);
           }
         }
@@ -1918,7 +1926,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         )}
       </div>
       <p style={{ fontSize: 11, opacity: 0.45, marginTop: 8, textAlign: "center" }}>
-        Tip: dash through hazards for a PERFECT dodge — slow-mo, bonus points, +1 ammo. Charge your shot for 3× boss
+        Tip: dash through hazards for a PERFECT dodge — slow-mo + bonus points. Charge your shot for 3× boss
         damage.
       </p>
     </div>
