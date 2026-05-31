@@ -22,12 +22,27 @@ const PHRASES = [
   "ser, you are not him",
   "spud says no",
   "more features cooking",
+  "catch me and i'll spill alpha",
+  "not your keys, not your potato",
+  "i fear no candle",
+  "wen catch?",
+  "this potato is feeling bullish",
+  "you're early. i'm faster.",
+  "blink and i'm gone",
+  "diamond skin, baby",
+  "respectfully, no",
+  "i've dodged worse bears",
+  "still not financial advice",
+  "zoom zoom",
+  "touch grass? i AM grass-adjacent",
 ];
 const FIRST_CATCH_PHRASES = [
   "okay okay, you touched the spud",
   "tiny potato, big panic",
   "wait… that was illegal",
   "fine. round two then.",
+  "lucky hands. won't happen twice.",
+  "ok that one's on me",
 ];
 
 const BONUS_AMMO_KEY = "iotato_bonus_ammo_claimed";
@@ -78,12 +93,12 @@ function setMascotPausedLS(v) {
    IOTATO CHARACTER — detailed SVG recreation of the mascot,
    built for animation (legs, arms, eyes, blink, expressions).
    ============================================================ */
-function IotatoCharacter({ size = 130, walkPhase = 0, running = false, blink = 0, lookX = 0, lookY = 0, scared = false }) {
-  // Body bob synced to stride
-  const bob = Math.abs(Math.sin(walkPhase)) * (running ? -6 : -2);
-  // Arms swing opposite to legs
-  const armL = Math.sin(walkPhase + Math.PI) * (running ? 22 : 6);
-  const armR = Math.sin(walkPhase) * (running ? 22 : 6);
+function IotatoCharacter({ size = 130, walkPhase = 0, running = false, moving = false, blink = 0, lookX = 0, lookY = 0, scared = false }) {
+  // Body bob — only while moving; otherwise a tiny idle breathing motion
+  const bob = moving ? Math.abs(Math.sin(walkPhase)) * (running ? -6 : -3) : Math.sin(walkPhase) * 0;
+  // Arms swing opposite to legs — only while moving, otherwise rest at sides
+  const armL = moving ? Math.sin(walkPhase + Math.PI) * (running ? 22 : 8) : 0;
+  const armR = moving ? Math.sin(walkPhase) * (running ? 22 : 8) : 0;
   // Lean forward when running
   const lean = running ? 4 : 0;
   // Eye openness (blink)
@@ -108,15 +123,15 @@ function IotatoCharacter({ size = 130, walkPhase = 0, running = false, blink = 0
       </defs>
 
       <g transform={`translate(0 ${bob}) rotate(${lean} 110 120)`}>
-        {/* ---- LEGS — proper running cycle (thigh + lower leg + foot) ---- */}
+        {/* ---- LEGS — proper running cycle; stand still when idle ---- */}
         {(() => {
-          // Each leg cycles through a run motion: forward reach → push back
           const renderLeg = (hipX, phaseOff) => {
             const ph = walkPhase + phaseOff;
-            // Hip swings the whole leg forward/back
-            const hipAngle = Math.sin(ph) * (running ? 38 : 14);
-            // Knee bends most when leg is lifting/forward
-            const kneeBend = running ? Math.max(0, Math.sin(ph + 0.5)) * 45 + 10 : Math.max(0, Math.sin(ph)) * 16 + 4;
+            // When idle, legs hang straight down (no swing, no knee bend)
+            const hipAngle = moving ? Math.sin(ph) * (running ? 38 : 16) : 0;
+            const kneeBend = moving
+              ? (running ? Math.max(0, Math.sin(ph + 0.5)) * 45 + 10 : Math.max(0, Math.sin(ph)) * 18 + 4)
+              : 6;
             const thighLen = 16;
             const shinLen = 16;
             return (
@@ -241,7 +256,10 @@ function IotatoCharacter({ size = 130, walkPhase = 0, running = false, blink = 0
   );
 }
 
-const HammerSVG = ({ size = 140 }) => (
+/* Hammer with the HEAD AT THE BOTTOM (striking face down) and handle going up,
+   so it can drop straight onto the potato's head like hitting a nail.
+   viewBox 200x240; the striking face is near y=210, handle top near y=10. */
+const HammerSVG = ({ size = 120 }) => (
   <svg viewBox="0 0 200 240" width={size} height={size * 1.2} style={{ filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.6))" }}>
     <defs>
       <linearGradient id="hH" x1="0" y1="0" x2="1" y2="1">
@@ -255,15 +273,18 @@ const HammerSVG = ({ size = 140 }) => (
         <stop offset="100%" stopColor="#5a3a1a" />
       </linearGradient>
     </defs>
-    <rect x="35" y="30" width="130" height="62" rx="10" fill="url(#hH)" />
-    <rect x="35" y="30" width="130" height="62" rx="10" fill="none" stroke="#0e1318" strokeWidth="2.5" />
-    <rect x="40" y="35" width="120" height="9" rx="4" fill="rgba(255,255,255,0.32)" />
-    <rect x="92" y="92" width="16" height="130" rx="6" fill="url(#hHa)" />
-    <rect x="92" y="92" width="16" height="130" rx="6" fill="none" stroke="#3a2410" strokeWidth="1.5" />
-    <rect x="91" y="180" width="18" height="3" fill="#3a2410" />
-    <rect x="91" y="195" width="18" height="3" fill="#3a2410" />
-    <rect x="91" y="210" width="18" height="3" fill="#3a2410" />
-    <ellipse cx="100" cy="225" rx="11" ry="5" fill="#3a2410" />
+    {/* Handle (top, going up out of frame) */}
+    <rect x="92" y="14" width="16" height="135" rx="6" fill="url(#hHa)" />
+    <rect x="92" y="14" width="16" height="135" rx="6" fill="none" stroke="#3a2410" strokeWidth="1.5" />
+    <rect x="91" y="30" width="18" height="3" fill="#3a2410" />
+    <rect x="91" y="45" width="18" height="3" fill="#3a2410" />
+    {/* Head (bottom — the striking part) */}
+    <rect x="35" y="148" width="130" height="62" rx="10" fill="url(#hH)" />
+    <rect x="35" y="148" width="130" height="62" rx="10" fill="none" stroke="#0e1318" strokeWidth="2.5" />
+    {/* shine on head */}
+    <rect x="40" y="153" width="120" height="9" rx="4" fill="rgba(255,255,255,0.32)" />
+    {/* striking face highlight at very bottom */}
+    <rect x="40" y="200" width="120" height="6" rx="3" fill="rgba(0,0,0,0.25)" />
   </svg>
 );
 
@@ -285,12 +306,14 @@ export default function FloatingMascot({ onBonusUnlocked }) {
   const [crumbs, setCrumbs] = useState([]);
   const [walkPhase, setWalkPhase] = useState(0);
   const [running, setRunning] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [blink, setBlink] = useState(0);
 
   const posRef = useRef({ x: 0, y: 0 });
   const velRef = useRef({ vx: 0, vy: 0 });
   const mouseRef = useRef({ x: -9999, y: -9999, seen: false });
   const lastBubbleRef = useRef(0);
+  const phraseQueueRef = useRef([]);
   const bubbleTimerRef = useRef(null);
   const bobRef = useRef(0);
   const facingRef = useRef(1);
@@ -373,6 +396,20 @@ export default function FloatingMascot({ onBonusUnlocked }) {
     };
   }, []);
 
+  // Returns the next phrase, cycling through a shuffled queue so none repeats
+  // until all have been shown (feels less random/repetitive).
+  const nextPhrase = useCallback(() => {
+    if (phraseQueueRef.current.length === 0) {
+      const shuffled = [...PHRASES];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      phraseQueueRef.current = shuffled;
+    }
+    return phraseQueueRef.current.shift();
+  }, []);
+
   const triggerStage1 = useCallback(() => {
     if (phaseRef.current !== "alive") return;
     phaseRef.current = "frozenStage1";
@@ -410,17 +447,21 @@ export default function FloatingMascot({ onBonusUnlocked }) {
     if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
     bubbleTimerRef.current = setTimeout(() => setBubble(null), 700);
     setShowHammer(true);
-    setHammerY(-280);
-    setHammerRot(-35);
+    // Hammer head starts high above and drops straight down onto the potato's head.
+    // With translate(-50%,-100%), hammerY is the y of the striking face.
+    setHammerY(-150);
+    setHammerRot(0);
     phaseRef.current = "hammer";
     setPhase("hammer");
     const start = performance.now();
-    const dur = 520;
+    const dur = 420;
     const anim = () => {
       const t = Math.min(1, (performance.now() - start) / dur);
-      const e2 = t * t;
-      setHammerY(-280 + (-90 + 280) * e2);
-      setHammerRot(-35 + (0 + 35) * e2);
+      // Ease-in (accelerate) for a satisfying slam
+      const e2 = t * t * t;
+      // Drop from -150 down to -55 (just touching top of the potato head)
+      setHammerY(-150 + 95 * e2);
+      setHammerRot(0);
       if (t < 1) requestAnimationFrame(anim);
       else {
         phaseRef.current = "smashed";
@@ -616,9 +657,9 @@ export default function FloatingMascot({ onBonusUnlocked }) {
         setSquash(1 + Math.min(0.15, t * 0.2));
         if (dist < paR && nMs - lastBubbleRef.current > 2400) {
           lastBubbleRef.current = nMs;
-          setBubble(PHRASES[Math.floor(Math.random() * PHRASES.length)]);
+          setBubble(nextPhrase());
           if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
-          bubbleTimerRef.current = setTimeout(() => setBubble(null), 2400);
+          bubbleTimerRef.current = setTimeout(() => setBubble(null), 2600);
           restRef.current.until = nMs + 1800;
         }
       } else if (resting) {
@@ -688,12 +729,21 @@ export default function FloatingMascot({ onBonusUnlocked }) {
       else if (velRef.current.vx < -0.3) facingRef.current = 1;
       setFacing(facingRef.current);
 
-      // Walk/run animation phase — speed of leg cycle scales with movement speed
+      // Walk/run animation phase — ONLY advances while the potato is actually moving.
+      // When idle, the cycle eases back to a neutral standing pose (phase 0).
       const moveSpeed = Math.hypot(velRef.current.vx, velRef.current.vy);
+      const isMoving = moveSpeed > 2.5;
       const isRunning = moveSpeed > 8;
-      walkRef.current += dt * (8 + moveSpeed * 0.8);
+      if (isMoving) {
+        walkRef.current += dt * (6 + moveSpeed * 0.9);
+      } else {
+        // Ease the limbs back toward a resting position (nearest multiple of PI → legs together)
+        const target = Math.round(walkRef.current / Math.PI) * Math.PI;
+        walkRef.current += (target - walkRef.current) * Math.min(1, dt * 8);
+      }
       setWalkPhase(walkRef.current);
       setRunning(isRunning);
+      setMoving(isMoving);
 
       // Blinking
       if (nMs > blinkRef.current.next) {
@@ -708,7 +758,7 @@ export default function FloatingMascot({ onBonusUnlocked }) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [isMobile, ready, scale, triggerStage1, triggerStage2, paused]);
+  }, [isMobile, ready, scale, triggerStage1, triggerStage2, paused, nextPhrase]);
 
   const togglePause = () => {
     setPaused((p) => {
@@ -781,24 +831,21 @@ export default function FloatingMascot({ onBonusUnlocked }) {
     );
   }
 
-  const bSt =
-    bubbleSide === "right"
-      ? { top: "-12px", left: "100%", marginLeft: "6px" }
-      : { top: "-12px", right: "100%", marginRight: "6px" };
-  const tSt =
-    bubbleSide === "right"
-      ? {
-          left: "-6px",
-          top: "16px",
-          borderLeft: "1px solid rgba(111,191,115,0.5)",
-          borderBottom: "1px solid rgba(111,191,115,0.5)",
-        }
-      : {
-          right: "-6px",
-          top: "16px",
-          borderRight: "1px solid rgba(111,191,115,0.5)",
-          borderTop: "1px solid rgba(111,191,115,0.5)",
-        };
+  // Speech bubble sits ABOVE the potato, with a tail pointing down into it,
+  // so it clearly originates from the character. Nudges left/right near edges.
+  const bSt = {
+    bottom: "100%",
+    left: "50%",
+    transform: "translateX(-50%)",
+    marginBottom: "10px",
+  };
+  const tSt = {
+    left: "50%",
+    bottom: "-6px",
+    marginLeft: "-6px",
+    borderRight: "1px solid rgba(111,191,115,0.5)",
+    borderBottom: "1px solid rgba(111,191,115,0.5)",
+  };
 
   return (
     <>
@@ -819,6 +866,7 @@ export default function FloatingMascot({ onBonusUnlocked }) {
             const moveSpeed = Math.hypot(velRef.current.vx, velRef.current.vy);
             const speedFactor = Math.min(1, moveSpeed / 22);
             const isRun = speedFactor > 0.35;
+            const isMov = moveSpeed > 2.5;
             const scared = phase === "frozenStage1" || phase === "frozenStage2" || phase === "hammer";
             // Eye tracking toward cursor (compensate for facing flip)
             const mx = mouseRef.current?.x ?? pos.x;
@@ -865,6 +913,7 @@ export default function FloatingMascot({ onBonusUnlocked }) {
                   size={132}
                   walkPhase={walkPhase}
                   running={isRun}
+                  moving={isMov}
                   blink={blink}
                   lookX={lookX}
                   lookY={lookY}
@@ -923,12 +972,12 @@ export default function FloatingMascot({ onBonusUnlocked }) {
                 position: "absolute",
                 left: "50%",
                 top: hammerY,
-                transform: `translate(-50%,0) rotate(${hammerRot}deg) scaleX(${facing})`,
-                transformOrigin: "50% 90%",
+                transform: `translate(-50%, -100%) rotate(${hammerRot}deg)`,
+                transformOrigin: "50% 100%",
                 pointerEvents: "none",
               }}
             >
-              <HammerSVG size={140} />
+              <HammerSVG size={120} />
             </div>
           )}
           {impactRing > 0 && (
