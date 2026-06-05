@@ -1267,6 +1267,16 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       else if (r < 0.022 + sc + 0.93)
         s.entities.push({ type: "paper", x, y: -30, vy: bs * 0.85, w: 42, h: 34, rot: 0, vr: 0.03 });
       else s.entities.push({ type: "fud", x, y: -30, vy: bs * 0.7, w: 34, h: 34, rot: 0, vr: 0.06 });
+
+      // Rising difficulty over time: chance to spawn an EXTRA red candle that grows
+      // the longer the run lasts (replaces the old "everything gets faster" model).
+      // Caps at ~+45% extra candle chance around the 6-minute mark.
+      const extraCandleChance = Math.min(0.45, s.time * 0.0013);
+      if (!bA && Math.random() < extraCandleChance) {
+        const ex = rand(30, s.w - 30);
+        const ch = Math.random() < 0.4 ? 32 : 52;
+        s.entities.push({ type: "candle", x: ex, y: -ch / 2 - 10, vy: bs * 1.05, w: 22, h: ch, rot: 0, vr: 0 });
+      }
     };
 
     const fire = (s, charged) => {
@@ -1340,10 +1350,15 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       const slowF = s.slowMo > 0 ? 0.35 : s.slow > 0 ? 0.5 : 1;
       // World speed multiplier — each boss kill increases speed by 25%
       // Tier 1 (start) = 1.0x, Tier 2 = 1.25x, Tier 3 = 1.5x, Tier 4 = 1.75x, etc.
-      const worldSpeed = 1 + s.bossesDefeated * 0.15;
+      // World speed rises more SLOWLY now (was 0.15) so the game stays playable
+      // deep in. Difficulty instead comes from more red candles over time (below).
+      const worldSpeed = 1 + s.bossesDefeated * 0.08;
       const edt = dt * slowF * worldSpeed;
       s.time += dt;
       const p = s.player;
+      // Time multiplier: the longer you survive, the more every point is worth —
+      // but only minimally. +6% per 30s, capped at ×2.5 (reached ~12.5 min).
+      const timeMult = Math.min(2.5, 1 + s.time * 0.002);
       // Score multiplier (combo, max ×5) + moon boost — defined early so the
       // boss-kill reward and all collectibles can use them.
       const mult = Math.min(5, 1 + Math.floor(s.comboF / 5));
@@ -1505,38 +1520,43 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         b.atkT -= edt;
         if (b.atkT <= 0) {
           if (tier >= 2 && (b.enraged || b.raging)) {
-            // Third boss and beyond: spiral spray — slightly FEWER candles than before (2 instead of 3)
+            // Third boss and beyond: spiral spray — 2 opposing streams
             b.spiralA += 0.6;
             for (let k = 0; k < 2; k++) {
-              const a = b.spiralA + k * Math.PI; // 2 opposing streams
+              const a = b.spiralA + k * Math.PI;
               s.entities.push({
-                type: "candle",
-                x: b.x,
-                y: b.y + 20,
-                vx: Math.cos(a) * 120,
-                vy: Math.sin(a) * 120 + 80,
-                w: 20,
-                h: 44,
-                rot: 0,
-                vr: 0.1,
+                type: "candle", x: b.x, y: b.y + 20,
+                vx: Math.cos(a) * 120, vy: Math.sin(a) * 120 + 80,
+                w: 20, h: 44, rot: 0, vr: 0.1,
+              });
+            }
+            // Boss 4 (tier 3+): occasionally fire ONE candle aimed at the player —
+            // forces you to keep moving, not just stand in a safe gap.
+            if (tier >= 3 && Math.random() < 0.5) {
+              const adx = p.x - b.x, ady = p.groundY - b.y;
+              const ad = Math.hypot(adx, ady) || 1;
+              s.entities.push({
+                type: "candle", x: b.x, y: b.y + 20,
+                vx: (adx / ad) * 200, vy: (ady / ad) * 200,
+                w: 20, h: 44, rot: 0, vr: 0.08, aimed: true,
               });
             }
             b.atkT = 0.55;
+            // Boss 5 (tier 4+): fire a quick second volley shortly after — short
+            // double-burst. Kept mild because world speed + extra candles already scale.
+            if (tier >= 4 && !b._volley) {
+              b._volley = true;
+              b.atkT = 0.18;
+            } else {
+              b._volley = false;
+            }
           } else {
             // Standard fan of candles
             for (let i = -2; i <= 2; i++)
               s.entities.push({
-                type: "candle",
-                x: b.x + i * 30,
-                y: b.y + 30,
-                vy: 220 + s.level * 10,
-                w: 22,
-                h: 52,
-                rot: 0,
-                vr: 0,
+                type: "candle", x: b.x + i * 30, y: b.y + 30,
+                vy: 220 + s.level * 10, w: 22, h: 52, rot: 0, vr: 0,
               });
-            // Boss 2 (tier 1): when raging, fire on a SHORTER interval (more often),
-            // same number of candles. Boss 1 and pre-rage use the normal interval.
             const baseInterval = Math.max(0.9, 2.0 - tier * 0.15);
             b.atkT = tier === 1 && b.raging ? baseInterval * 0.55 : baseInterval;
           }
@@ -1613,7 +1633,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         if (kill || sh.life <= 0 || sh.x < -30 || sh.x > s.w + 30 || sh.y > s.h + 30) s.shots.splice(i, 1);
       }
       // score/combo — ONE unified combo system (max ×5)
-      s.score += dt * 5;
+      s.score += dt * 5 * timeMult;
       // Combo decays slowly over time, resets to 0 on hit (handled in damage())
       if (s.comboF > 0) s.comboF = Math.max(0, s.comboF - dt * 0.45);
       // entities
@@ -1681,8 +1701,11 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         }
         if (coll(e, p)) {
           if (e.type === "tat") {
-            // TAT coin (merged IOTA+TLN) — big points, no screenshake (just sparkle + ring)
-            const gained = Math.round(120 * mult * moonM);
+            // TAT coin: base 65, gets a REDUCED combo bonus (half the multiplier
+            // steps) plus moon + time multiplier. Rewards combo play without being
+            // the runaway it used to be.
+            const tatMult = 1 + (mult - 1) * 0.5; // ×1 .. ×3 instead of ×1..×5
+            const gained = Math.round(65 * tatMult * moonM * timeMult);
             s.comboF = Math.min(25, s.comboF + 2);
             s.score += gained;
             addP(s, e.x, e.y, "#e8b84a", 32);
@@ -1695,7 +1718,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             const depthBonus = e.y > s.h * 0.66 ? 1.5 : 1;
             const base = (isI ? 10 : 15) + (isAir ? 5 : 0);
             s.comboF = Math.min(25, s.comboF + 1);
-            const gained = Math.round(base * mult * moonM * depthBonus);
+            const gained = Math.round(base * mult * moonM * depthBonus * timeMult);
             s.score += gained;
             const col = isI ? "#4fd6c4" : "#7aa8ff";
             addP(s, e.x, e.y, col, 16);
