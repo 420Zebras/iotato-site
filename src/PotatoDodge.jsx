@@ -919,13 +919,18 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
   }, []);
 
   const mkState = useCallback(
-    (w, h) => ({
+    (w, h) => {
+      // On touch devices the fullscreen controls sit in the bottom corners, so give
+      // the world extra bottom clearance to keep the player/ground above them.
+      const isTouchDev = typeof window !== "undefined" && window.matchMedia("(hover: none), (pointer: coarse)").matches;
+      const groundOff = isTouchDev ? 110 : 80;
+      return {
       w,
       h,
       player: {
         x: w / 2,
-        y: h - 80,
-        groundY: h - 80,
+        y: h - groundOff,
+        groundY: h - groundOff,
         w: 44,
         h: 50,
         vx: 0,
@@ -999,7 +1004,8 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       levelFlash: 0,
       tierUpFlash: 0,
       ammo: 3 + getBonusAmmo(),
-    }),
+      };
+    },
     [],
   );
 
@@ -2540,11 +2546,94 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             </div>
           </div>
         )}
+        {/* Fullscreen mobile controls: compact, semi-transparent, in the bottom
+            corners. The canvas fills the whole screen behind them; the clear center
+            keeps the play area visible. Only the controls capture touches. */}
+        {isTouch && isFs && (
+          <div style={{ position: "absolute", inset: 0, zIndex: 30, pointerEvents: "none" }}>
+            {/* Joystick — bottom left */}
+            <div
+              onTouchStart={onJoyStart}
+              onTouchMove={onJoyMove}
+              onTouchEnd={onJoyEnd}
+              style={{
+                position: "absolute",
+                left: 14,
+                bottom: 14,
+                width: 104,
+                height: 62,
+                borderRadius: 14,
+                background: "rgba(20,30,25,0.32)",
+                border: "1px solid rgba(111,191,115,0.4)",
+                backdropFilter: "blur(3px)",
+                WebkitBackdropFilter: "blur(3px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 11,
+                color: "rgba(231,226,214,0.7)",
+                fontWeight: 700,
+                letterSpacing: "0.05em",
+                pointerEvents: "auto",
+              }}
+            >
+              ◀ MOVE ▶
+            </div>
+            {/* Shoot + Jump — bottom right, side by side */}
+            <div
+              style={{
+                position: "absolute",
+                right: 14,
+                bottom: 14,
+                display: "flex",
+                gap: 10,
+                pointerEvents: "auto",
+              }}
+            >
+              <button
+                onTouchStart={tapJump}
+                style={{
+                  width: 72,
+                  height: 62,
+                  borderRadius: 14,
+                  background: "rgba(79,214,196,0.28)",
+                  border: "1px solid rgba(79,214,196,0.55)",
+                  backdropFilter: "blur(3px)",
+                  WebkitBackdropFilter: "blur(3px)",
+                  color: "#bdeee8",
+                  fontWeight: 800,
+                  fontSize: 13,
+                }}
+              >
+                ⬆ JUMP
+              </button>
+              <button
+                onTouchStart={tapShootStart}
+                onTouchEnd={tapShootEnd}
+                style={{
+                  width: 80,
+                  height: 62,
+                  borderRadius: 14,
+                  background: "rgba(111,191,115,0.32)",
+                  border: "1px solid rgba(111,191,115,0.6)",
+                  backdropFilter: "blur(3px)",
+                  WebkitBackdropFilter: "blur(3px)",
+                  color: "#cdeccf",
+                  fontWeight: 800,
+                  fontSize: 13,
+                }}
+              >
+                🌱 SHOOT
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Mobile control bar — always sits BELOW the game in normal flow so it never
-          covers the play area. Compact styling in fullscreen to save vertical space. */}
-      {isTouch && (
+      {/* Mobile controls. In fullscreen: compact semi-transparent overlay pinned to
+          the bottom CORNERS so the center play area stays clear and the canvas can
+          fill the whole screen. Otherwise: solid bar below the game. */}
+      {isTouch && !isFs && (
         <div
           style={{
             display: "flex",
@@ -2553,7 +2642,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             gap: 12,
             userSelect: "none",
             touchAction: "none",
-            marginTop: isFs ? 6 : 10,
+            marginTop: 10,
             flexShrink: 0,
           }}
         >
@@ -2563,8 +2652,8 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             onTouchMove={onJoyMove}
             onTouchEnd={onJoyEnd}
             style={{
-              width: isFs ? 140 : 120,
-              height: isFs ? 88 : 90,
+              width: 120,
+              height: 90,
               borderRadius: 16,
               background: "rgba(20,30,25,0.7)",
               border: "1px solid rgba(111,191,115,0.35)",
@@ -2580,14 +2669,13 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           >
             ◀ MOVE ▶
           </div>
-
           {/* Shoot + Jump on the right */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: isFs ? 140 : 120 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: 120 }}>
             <button
               onTouchStart={tapShootStart}
               onTouchEnd={tapShootEnd}
               style={{
-                height: isFs ? 40 : 41,
+                height: 41,
                 borderRadius: 12,
                 background: "rgba(111,191,115,0.25)",
                 border: "1px solid rgba(111,191,115,0.5)",
@@ -2601,7 +2689,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             <button
               onTouchStart={tapJump}
               style={{
-                height: isFs ? 40 : 41,
+                height: 41,
                 borderRadius: 12,
                 background: "rgba(79,214,196,0.2)",
                 border: "1px solid rgba(79,214,196,0.5)",
