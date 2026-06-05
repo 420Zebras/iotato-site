@@ -1294,8 +1294,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     };
 
     const startBoss = (s) => {
-      const hpT = [9, 12, 15];
-      const hp = hpT[Math.min(s.bossesDefeated, 2)];
+      const hp = 4 + s.bossesDefeated; // 4, 5, 6, 7, ... (+1 per boss)
       s.boss = {
         hpMax: hp,
         hp,
@@ -1481,28 +1480,35 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         if (b.x < 80 || b.x > s.w - 80) b.dir *= -1;
         b.y = 90 + Math.sin(b.bob) * 30;
         if (b.hitFlash > 0) b.hitFlash -= dt;
-        // Rage timer: punishes camping on a boss without killing it.
-        s.bossRageTimer += dt;
-        // After 25s, boss starts ramping up attack speed; capped escalation.
-        const rageRamp = Math.max(0, s.bossRageTimer - 25);
-        b.rageMult = 1 + Math.min(1.5, rageRamp * 0.05); // up to 2.5× attack rate
-        if (rageRamp > 0 && !b._rageWarn) {
-          b._rageWarn = true;
-          addT(s, b.x, b.y, "GETTING ANGRY...", "#ff5a6a", true);
+
+        const tier = s.bossesDefeated; // 0 = first boss, 1 = second, 2+ = third and beyond
+        // Boss 1 (tier 0) never changes — no rage, no enrage, steady fire.
+        if (tier >= 1) {
+          // Rage timer: after 40s the boss escalates (15s longer than before).
+          s.bossRageTimer += dt;
+          const rageRamp = Math.max(0, s.bossRageTimer - 40);
+          b.raging = rageRamp > 0;
+          if (b.raging && !b._rageWarn) {
+            b._rageWarn = true;
+            addT(s, b.x, b.y, "GETTING ANGRY...", "#ff5a6a", true);
+          }
+          // Enrage at half HP (tier 2+ only — gives the spiral spray)
+          if (tier >= 2 && !b.enraged && b.hp <= b.hpMax * 0.5) {
+            b.enraged = true;
+            b.vx *= 1.4;
+            s.flash = 0.3;
+            s.flashColor = "#ff5a6a";
+            addT(s, b.x, b.y, "ENRAGED!", "#ff5a6a", true);
+          }
         }
-        if (!b.enraged && b.hp <= b.hpMax * 0.5) {
-          b.enraged = true;
-          b.vx *= 1.5;
-          s.flash = 0.3;
-          s.flashColor = "#ff5a6a";
-          addT(s, b.x, b.y, "ENRAGED!", "#ff5a6a", true);
-        }
-        b.atkT -= edt * (b.rageMult || 1);
+
+        b.atkT -= edt;
         if (b.atkT <= 0) {
-          if (b.enraged) {
+          if (tier >= 2 && (b.enraged || b.raging)) {
+            // Third boss and beyond: spiral spray — slightly FEWER candles than before (2 instead of 3)
             b.spiralA += 0.6;
-            for (let k = 0; k < 3; k++) {
-              const a = b.spiralA + k * ((Math.PI * 2) / 3);
+            for (let k = 0; k < 2; k++) {
+              const a = b.spiralA + k * Math.PI; // 2 opposing streams
               s.entities.push({
                 type: "candle",
                 x: b.x,
@@ -1515,8 +1521,9 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
                 vr: 0.1,
               });
             }
-            b.atkT = 0.5;
+            b.atkT = 0.55;
           } else {
+            // Standard fan of candles
             for (let i = -2; i <= 2; i++)
               s.entities.push({
                 type: "candle",
@@ -1528,7 +1535,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
                 rot: 0,
                 vr: 0,
               });
-            b.atkT = Math.max(0.8, 2.0 - s.bossesDefeated * 0.15);
+            // Boss 2 (tier 1): when raging, fire on a SHORTER interval (more often),
+            // same number of candles. Boss 1 and pre-rage use the normal interval.
+            const baseInterval = Math.max(0.9, 2.0 - tier * 0.15);
+            b.atkT = tier === 1 && b.raging ? baseInterval * 0.55 : baseInterval;
           }
         }
         if (Math.abs(p.x - b.x) < 55 && Math.abs(p.y - b.y) < 45) {
