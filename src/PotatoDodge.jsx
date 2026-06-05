@@ -58,6 +58,13 @@ const btnGhost = {
 const rand = (a, b) => a + Math.random() * (b - a),
   clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+/* Fixed logical game world. The simulation ALWAYS runs at this size so the
+   difficulty (play area, gem spawn density, dodge room) is identical on phone,
+   desktop, and fullscreen. The canvas is only scaled to display it. */
+const GAME_W = 760;
+const GAME_H = 560;
+const GAME_ASPECT = GAME_W / GAME_H;
+
 /* ---------- draw helpers ---------- */
 function drawBackground(ctx, s) {
   const g = ctx.createLinearGradient(0, 0, 0, s.h);
@@ -637,12 +644,13 @@ function Overlay({ children }) {
    upgrades the strength: 1× weak, 2× medium, 3× strong.
    ============================================================ */
 const SLOT_SYMBOLS = [
-  { id: "magnet", icon: "🧲", name: "Magnet", desc: ["Pulls gems for 30s", "Pulls gems for 48s", "Pulls gems for 72s"] },
-  { id: "shield", icon: "🛡️", name: "Shield", desc: ["Blocks 2 hits", "Blocks 3 hits", "Blocks 4 hits"] },
-  { id: "slow", icon: "⏱️", name: "Slow Time", desc: ["Slow world 15s", "Slow world 24s", "Slow world 36s"] },
+  { id: "magnet", icon: "🧲", name: "Magnet", desc: ["Pulls gems 15s", "Pulls gems 30s", "Pulls gems 45s"] },
+  { id: "shield", icon: "🛡️", name: "Shield", desc: ["Blocks 1 hit", "Blocks 2 hits", "Blocks 3 hits"] },
+  { id: "slow", icon: "⏱️", name: "Slow Time", desc: ["Slow world 15s", "Slow world 30s", "Slow world 45s"] },
   { id: "ammo", icon: "🌱", name: "Ammo", desc: ["+3 ammo", "+6 ammo", "+9 ammo"] },
-  { id: "gemrain", icon: "💎", name: "Gem Rain", desc: ["Extra gems 12s", "Extra gems 19s", "Extra gems 29s"] },
-  { id: "heart", icon: "❤️", name: "Extra Life", desc: ["+1 life", "+2 life", "+3 life"] },
+  { id: "gemrain", icon: "💎", name: "Gem Rain", desc: ["Extra gems 10s", "Extra gems 15s", "Extra gems 20s"] },
+  { id: "life", icon: "❤️", name: "Extra Life", desc: ["+1 max life", "+2 max life", "+3 max life"] },
+  { id: "iotato", icon: "🥔", name: "IOTATO Pull", desc: ["$TAT magnet 6s", "$TAT magnet 12s", "$TAT magnet 18s"] },
 ];
 
 function SlotMachine({ onResolve }) {
@@ -817,6 +825,7 @@ function SlotMachine({ onResolve }) {
    ============================================================ */
 function PotatoDodge({ onSubmitScore, personalBest }) {
   const canvasRef = useRef(null);
+  const canvasViewRef = useRef({ scale: 1, offX: 0, offY: 0, dpr: 1 });
   const [running, setRunning] = useState(false);
   const [over, setOver] = useState(false);
   const bonusActive = getBonusAmmo() > 0;
@@ -838,36 +847,39 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
   const [finalStats, setFinalStats] = useState({ score: 0, time: 0, level: 1 });
   const [slotOpen, setSlotOpen] = useState(false);
   const stateRef = useRef(null);
-  const ammoMax = 12;
+  const ammoMax = 15;
 
   // Apply a slot-machine bonus to the live game state, scaled by strength (1=weak,2=med,3=strong)
   const applySlotBonus = useCallback((symbolId, strength) => {
     const s = stateRef.current;
     if (!s) return;
-    const mag = { 1: 1, 2: 1.6, 3: 2.4 }[strength] || 1;
     switch (symbolId) {
       case "magnet":
-        s.buffMagnet = Math.round(30 * mag); // 30 / 48 / 72 s
+        s.buffMagnet = strength * 15; // 15 / 30 / 45 s
         break;
       case "shield":
-        s.shield = Math.min(6, strength + 1); // 2 / 3 / 4 hits
+        // Permanent shield charges (1/2/3), no timer — last until hit. Capped at maxLives display.
+        s.shield = Math.min(s.maxLives, s.shield + strength);
+        s.shieldTimer = 0; // slot shields never expire
         break;
       case "slow":
-        s.buffSlow = Math.round(15 * mag);
+        s.buffSlow = strength * 15; // 15 / 30 / 45 s
         s.slow = Math.max(s.slow, s.buffSlow);
         break;
       case "ammo":
-        s.ammo = Math.min(ammoMax, s.ammo + strength * 3);
+        s.ammo = Math.min(ammoMax, s.ammo + strength * 3); // +3/6/9
         break;
       case "gemrain":
-        s.buffGemRain = Math.round(12 * mag);
+        s.buffGemRain = 5 + strength * 5; // 10 / 15 / 20 s
         break;
-      case "heart":
-        // strong heal; if full, convert to points
-        for (let k = 0; k < strength; k++) {
-          if (s.lives < s.maxLives) s.lives++;
-          else s.score += 100;
-        }
+      case "life":
+        // Permanently raise max lives AND grant the lives
+        s.maxLives += strength;
+        s.lives += strength;
+        break;
+      case "iotato":
+        // Light $TAT pull: gems drift together so they merge into $TAT more often
+        s.buffIotato = strength * 6; // 6 / 12 / 18 s
         break;
       default:
         break;
@@ -934,6 +946,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       flash: 0,
       flashColor: "#ff5a6a",
       shield: 0,
+      shieldTimer: 0, // >0 = temporary shield (from gold pickup); 0 = permanent (slot) or none
       slow: 0,
       slowMo: 0,
       moonBoost: 0,
@@ -943,6 +956,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       buffMagnet: 0,
       buffSlow: 0,
       buffGemRain: 0,
+      buffIotato: 0,
       bossRageTimer: 0,
       spawnT: 0,
       score: 0,
@@ -1017,19 +1031,28 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
+    // Convert a screen event to fixed world coordinates (accounts for scale + letterbox)
+    const toWorld = (e) => {
+      const r = c.getBoundingClientRect();
+      const v = canvasViewRef.current;
+      return {
+        x: (e.clientX - r.left - v.offX) / v.scale,
+        y: (e.clientY - r.top - v.offY) / v.scale,
+      };
+    };
     const onM = (e) => {
       const st = stateRef.current;
       if (!st) return;
-      const r = c.getBoundingClientRect();
-      st.player.aimX = e.clientX - r.left;
-      st.player.aimY = e.clientY - r.top;
+      const w = toWorld(e);
+      st.player.aimX = w.x;
+      st.player.aimY = w.y;
     };
     const onD = (e) => {
       const st = stateRef.current;
       if (!st || e.button !== 0) return;
-      const r = c.getBoundingClientRect();
-      st.player.aimX = e.clientX - r.left;
-      st.player.aimY = e.clientY - r.top;
+      const w = toWorld(e);
+      st.player.aimX = w.x;
+      st.player.aimY = w.y;
       st.keys.shoot = true;
     };
     const onU = () => {
@@ -1049,15 +1072,37 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     };
   }, []);
 
+  // Size the canvas backing store to the fixed game world and set a transform so
+  // all drawing uses GAME_W×GAME_H coordinates, scaled to fill the element while
+  // preserving aspect ratio (letterboxed). Keeps gameplay identical at any size.
+  const setupCanvas = () => {
+    const c = canvasRef.current;
+    if (!c) return null;
+    const rect = c.getBoundingClientRect();
+    const dpr = devicePixelRatio || 1;
+    c.width = Math.round(rect.width * dpr);
+    c.height = Math.round(rect.height * dpr);
+    const ctx = c.getContext("2d");
+    // scale so the fixed world fits inside the element, centered (letterbox)
+    const scale = Math.min(rect.width / GAME_W, rect.height / GAME_H);
+    const offX = (rect.width - GAME_W * scale) / 2;
+    const offY = (rect.height - GAME_H * scale) / 2;
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * offX, dpr * offY);
+    canvasViewRef.current = { scale, offX, offY, dpr };
+    return ctx;
+  };
+
   const start = () => {
     const c = canvasRef.current;
     if (!c) return;
-    const r = c.getBoundingClientRect();
-    c.width = r.width * devicePixelRatio;
-    c.height = r.height * devicePixelRatio;
-    stateRef.current = mkState(r.width, r.height);
+    setupCanvas();
+    stateRef.current = mkState(GAME_W, GAME_H);
     setOver(false);
     setRunning(true);
+    // Tell the floating mascot to clear off-screen so the player can focus.
+    try {
+      window.dispatchEvent(new CustomEvent("iotato:game-start"));
+    } catch {}
   };
 
   /* main loop */
@@ -1065,8 +1110,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     if (!running) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
-    const dpr = devicePixelRatio;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    setupCanvas();
     let raf;
 
     const addP = (s, x, y, col, n = 12, spd = 160) => {
@@ -1215,6 +1259,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       };
       s.bossIntro = 1.8;
       s.ammo = Math.max(s.ammo, 6);
+      s.shake = 0.25; // light, brief shake to announce the boss
     };
 
     const loop = (ts) => {
@@ -1345,6 +1390,13 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             x: gx, y: -30, vy: gbs * 0.95, w: 30, h: 30, rot: 0, vr: 0.04,
           });
         }
+        // IOTATO buff: spawn an IOTA+TLN pair close together so $TAT coins form more often
+        if (s.buffIotato > 0) {
+          const gx = rand(60, s.w - 60);
+          const gbs = 120 + s.level * 26;
+          s.entities.push({ type: "iota", x: gx - 16, y: -30, vy: gbs * 0.9, w: 30, h: 30, rot: 0, vr: 0.04 });
+          s.entities.push({ type: "tln", x: gx + 16, y: -34, vy: gbs * 0.9, w: 30, h: 30, rot: 0, vr: -0.04 });
+        }
         s.spawnT = Math.max(0.16, 0.85 - s.level * 0.06);
       }
       // lightning — also scales with world speed
@@ -1470,15 +1522,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
               addP(s, b.x, b.y, "#e8b84a", 50);
               addT(s, b.x, b.y, "BOSS DOWN!", "#e8b84a", true);
               s.explosions.push({ x: b.x, y: b.y, r: 0, maxR: 120, life: 0.8, max: 0.8 });
-              const bx = b.x, by = b.y;
               s.boss = null;
               s.bossRageTimer = 0;
               s.ammo = Math.min(ammoMax, s.ammo + 4);
               s.tierUpFlash = 3.0; // Show LEVEL X banner for 3 seconds
-              // Rare heart drop (only if not at max lives)
-              if (s.lives < s.maxLives && Math.random() < 0.35) {
-                s.entities.push({ type: "heart", x: bx, y: by, vy: 60, w: 34, h: 30, rot: 0, vr: 0.03 });
-              }
               // Trigger the bonus slot machine
               s.pendingSlot = true;
             }
@@ -1522,7 +1569,15 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           // need one IOTA and one TLN
           if ((aIota && bTln) || (aTln && bIota)) {
             const dx = ea.x - eb.x, dy = ea.y - eb.y;
-            if (Math.hypot(dx, dy) < (ea.w + eb.w) / 2) {
+            const dd = Math.hypot(dx, dy);
+            // IOTATO buff: gently pull a nearby IOTA+TLN pair together so they merge more often
+            if (s.buffIotato > 0 && dd > (ea.w + eb.w) / 2 && dd < 180) {
+              const pull = 90 * dt;
+              const ux = dx / (dd || 1), uy = dy / (dd || 1);
+              ea.x -= ux * pull; ea.y -= uy * pull;
+              eb.x += ux * pull; eb.y += uy * pull;
+            }
+            if (dd < (ea.w + eb.w) / 2) {
               const mx = (ea.x + eb.x) / 2, my = (ea.y + eb.y) / 2;
               ea._merged = true;
               eb._merged = true;
@@ -1562,14 +1617,13 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         }
         if (coll(e, p)) {
           if (e.type === "tat") {
-            // TAT coin (merged IOTA+TLN) — big points
+            // TAT coin (merged IOTA+TLN) — big points, no screenshake (just sparkle + ring)
             const gained = Math.round(120 * mult * moonM);
             s.comboF = Math.min(25, s.comboF + 2);
             s.score += gained;
             addP(s, e.x, e.y, "#e8b84a", 32);
             addT(s, e.x, e.y, `+${gained} $TAT!`, "#e8b84a", true);
             s.explosions.push({ x: e.x, y: e.y, r: 0, maxR: 60, life: 0.4, max: 0.4, ring: "#e8b84a" });
-            s.shake = Math.min(10, s.shake + 5);
             s.entities.splice(i, 1);
           } else if (isG) {
             const isAir = e.type.endsWith("_air");
@@ -1586,24 +1640,16 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             s.entities.splice(i, 1);
           } else if (e.type === "gold") {
             s.score += 25 * moonM;
-            s.shield = 3;
-            s.slow = 2.5;
+            // Shield from gold pickup: 1 hit, but only lasts 15s if unused
+            s.shield = Math.max(s.shield, 1);
+            s.shieldTimer = 15;
+            s.slow = 3;
             addP(s, e.x, e.y, "#e8b84a", 28);
             addT(s, e.x, e.y, "SHIELD!", "#e8b84a");
             s.entities.splice(i, 1);
-          } else if (e.type === "heart") {
-            if (s.lives < s.maxLives) {
-              s.lives++;
-              addT(s, e.x, e.y, "+1 LIFE!", "#ff5a7a", true);
-            } else {
-              s.score += 100 * moonM;
-              addT(s, e.x, e.y, "+100", "#ff5a7a");
-            }
-            addP(s, e.x, e.y, "#ff5a7a", 26);
-            s.entities.splice(i, 1);
           } else if (e.type === "moon") {
             s.score += 15;
-            s.moonBoost = 5;
+            s.moonBoost = 10;
             addP(s, e.x, e.y, "#7aa8ff", 22);
             addT(s, e.x, e.y, "2× POINTS!", "#7aa8ff");
             s.entities.splice(i, 1);
@@ -1653,7 +1699,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       [
         "shake",
         "flash",
-        "shield",
         "slow",
         "slowMo",
         "moonBoost",
@@ -1661,12 +1706,21 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         "buffMagnet",
         "buffSlow",
         "buffGemRain",
+        "buffIotato",
         "levelFlash",
         "bossIntro",
         "tierUpFlash",
       ].forEach((k) => {
         if (s[k] > 0) s[k] -= dt;
       });
+      // Temporary (gold-pickup) shield expires after its timer; slot shields are permanent.
+      if (s.shieldTimer > 0) {
+        s.shieldTimer -= dt;
+        if (s.shieldTimer <= 0 && s.shield > 0) {
+          s.shield = 0;
+          addT(s, s.player.x, s.player.y - 30, "shield faded", "#e8b84a");
+        }
+      }
       // bg
       for (const st of s.stars) {
         st.y += (15 + s.level * 3) * st.z * dt;
@@ -1682,7 +1736,14 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       }
 
       /* DRAW */
-      ctx.clearRect(0, 0, s.w, s.h);
+      // Re-apply transform each frame so fullscreen/resize is handled live.
+      setupCanvas();
+      // Clear the ENTIRE backing store (including letterbox bars) in device space
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "#05090f";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
       drawBackground(ctx, s);
       drawHills(ctx, s);
       drawFog(ctx, s);
@@ -1692,8 +1753,11 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       ctx.moveTo(0, p.groundY + 30);
       ctx.lineTo(s.w, p.groundY + 30);
       ctx.stroke();
-      const sx = s.shake > 0 ? rand(-1, 1) * 10 : 0,
-        sy = s.shake > 0 ? rand(-1, 1) * 10 : 0;
+      // Shake intensity scales with the remaining shake value so it decays smoothly
+      // and short shakes are gentle. Capped so it never gets nauseating.
+      const shakeAmp = s.shake > 0 ? Math.min(10, s.shake * 16) : 0;
+      const sx = shakeAmp ? rand(-1, 1) * shakeAmp : 0,
+        sy = shakeAmp ? rand(-1, 1) * shakeAmp : 0;
       ctx.save();
       ctx.translate(sx, sy);
       for (const lt of s.lightning) {
@@ -1965,6 +2029,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         buffMagnet: s.buffMagnet,
         buffSlow: s.buffSlow,
         buffGemRain: s.buffGemRain,
+        buffIotato: s.buffIotato,
         shield: s.shield,
       });
       raf = requestAnimationFrame(loop);
@@ -2071,7 +2136,37 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       >
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <StatBadge label="Score" value={hud.score} />
-          <StatBadge label="Lives" value={"♥".repeat(Math.max(0, hud.lives)) || "—"} accent />
+          <div
+            style={{
+              padding: "6px 12px",
+              borderRadius: 10,
+              background: "rgba(20,30,25,0.6)",
+              border: "1px solid rgba(111,191,115,0.2)",
+              fontSize: 13,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span style={{ opacity: 0.6, fontSize: 11 }}>Lives</span>
+            <span style={{ letterSpacing: 1 }}>
+              {(() => {
+                // Grey hearts = shielded (the first `shield` hearts), red = normal lives.
+                const total = Math.max(hud.lives, 0);
+                const shielded = Math.min(hud.shield || 0, total);
+                const hearts = [];
+                for (let i = 0; i < total; i++) {
+                  const isShield = i < shielded;
+                  hearts.push(
+                    <span key={i} style={{ color: isShield ? "#9aa6a0" : "#ff5a7a", filter: isShield ? "grayscale(1)" : "none" }}>
+                      ♥
+                    </span>,
+                  );
+                }
+                return hearts.length ? hearts : "—";
+              })()}
+            </span>
+          </div>
           <StatBadge label="Time" value={`${hud.time.toFixed(1)}s`} />
           <StatBadge
             label="Lvl"
@@ -2081,10 +2176,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           {hud.combo >= 5 && (
             <StatBadge label="Combo" value={`×${hud.mult}${hud.mult >= 5 ? " MAX🔥" : ""}`} highlight />
           )}
-          {hud.shield > 0 && <StatBadge label="Shield" value={`🛡️${hud.shield}`} highlight />}
           {hud.buffMagnet > 0 && <StatBadge label="Magnet" value={`🧲${Math.ceil(hud.buffMagnet)}s`} highlight />}
           {hud.buffSlow > 0 && <StatBadge label="Slow" value={`⏱️${Math.ceil(hud.buffSlow)}s`} highlight />}
           {hud.buffGemRain > 0 && <StatBadge label="Gems" value={`💎${Math.ceil(hud.buffGemRain)}s`} highlight />}
+          {hud.buffIotato > 0 && <StatBadge label="$TAT" value={`🥔${Math.ceil(hud.buffIotato)}s`} highlight />}
         </div>
         {personalBest && (
           <div style={{ fontSize: 12, opacity: 0.7 }}>
@@ -2163,8 +2258,8 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           style={{
             display: "block",
             width: "100%",
-            height: "min(70vh,560px)",
-            background: "#0a1310",
+            height: isFs ? "calc(100vh - 160px)" : "min(70vh,560px)",
+            background: "#05090f",
             touchAction: "none",
             cursor: running ? "crosshair" : "default",
           }}

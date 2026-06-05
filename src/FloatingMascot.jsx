@@ -385,6 +385,8 @@ export default function FloatingMascot({ onBonusUnlocked }) {
   }, []);
 
   // Game-over taunt — mascot pops toward center and drops a cheeky line
+  // While a game is being played the mascot clears off-screen so the player can
+  // focus. On game-over it runs back in from the nearest side and taunts.
   useEffect(() => {
     const TAUNTS = [
       "lol skill issue",
@@ -400,20 +402,59 @@ export default function FloatingMascot({ onBonusUnlocked }) {
       "ngmi 🥔",
       "my grandma scored higher",
     ];
-    const h = () => {
-      if (isMobile || phaseRef.current === "hidden") return;
-      // Jump toward a visible spot near center-top of the viewport
-      const tx = window.innerWidth * 0.5 + (Math.random() - 0.5) * 200;
-      const ty = window.innerHeight * 0.32;
-      posRef.current = { x: tx, y: ty };
-      velRef.current = { vx: 0, vy: 0 };
-      restRef.current.until = Date.now() + 3500; // stand still and gloat
-      setBubble(TAUNTS[Math.floor(Math.random() * TAUNTS.length)]);
+    const onStart = () => {
+      // Hide the mascot completely during play
       if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
-      bubbleTimerRef.current = setTimeout(() => setBubble(null), 3500);
+      setBubble(null);
+      phaseRef.current = "gamehidden";
+      setPhase("gamehidden");
     };
-    window.addEventListener("iotato:game-over", h);
-    return () => window.removeEventListener("iotato:game-over", h);
+    const onOver = () => {
+      if (isMobile) return;
+      // Run in from whichever side is nearer the last position (or random)
+      const fromLeft = Math.random() < 0.5;
+      const startX = fromLeft ? -160 : window.innerWidth + 160;
+      const targetX = fromLeft ? window.innerWidth * 0.5 - 120 : window.innerWidth * 0.5 + 120;
+      const ty = window.innerHeight * 0.34;
+      posRef.current = { x: startX, y: ty };
+      setPos({ x: startX, y: ty });
+      facingRef.current = fromLeft ? 1 : -1;
+      setFacing(facingRef.current);
+      phaseRef.current = "gameover";
+      setPhase("gameover");
+      // Animate run-in to target
+      const startT = performance.now();
+      const dur = 700;
+      const runIn = () => {
+        if (phaseRef.current !== "gameover") return;
+        const t = Math.min(1, (performance.now() - startT) / dur);
+        const e = 1 - Math.pow(1 - t, 3);
+        const x = startX + (targetX - startX) * e;
+        posRef.current = { x, y: ty };
+        setPos({ x, y: ty });
+        if (t < 1) requestAnimationFrame(runIn);
+        else {
+          setBubble(TAUNTS[Math.floor(Math.random() * TAUNTS.length)]);
+          if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+          bubbleTimerRef.current = setTimeout(() => setBubble(null), 4000);
+          // After gloating, return to normal floating behavior (unless a new
+          // game starts first, which sets gamehidden).
+          setTimeout(() => {
+            if (phaseRef.current === "gameover") {
+              phaseRef.current = "alive";
+              setPhase("alive");
+            }
+          }, 4200);
+        }
+      };
+      requestAnimationFrame(runIn);
+    };
+    window.addEventListener("iotato:game-start", onStart);
+    window.addEventListener("iotato:game-over", onOver);
+    return () => {
+      window.removeEventListener("iotato:game-start", onStart);
+      window.removeEventListener("iotato:game-over", onOver);
+    };
   }, [isMobile]);
 
   useEffect(() => {
@@ -803,6 +844,9 @@ export default function FloatingMascot({ onBonusUnlocked }) {
   // On mobile / touch devices there is no cursor to dodge, so the mascot
   // doesn't make sense — disable it entirely.
   if (isMobile) return null;
+
+  // During active gameplay the mascot is completely gone (no character, no button)
+  if (phase === "gamehidden") return null;
 
   if (!ready || phase === "hidden") {
     // Even when hidden, show the pause toggle so user knows mascot exists
