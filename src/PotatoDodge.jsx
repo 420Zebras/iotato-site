@@ -1268,14 +1268,21 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         s.entities.push({ type: "paper", x, y: -30, vy: bs * 0.85, w: 42, h: 34, rot: 0, vr: 0.03 });
       else s.entities.push({ type: "fud", x, y: -30, vy: bs * 0.7, w: 34, h: 34, rot: 0, vr: 0.06 });
 
-      // Rising difficulty over time: chance to spawn an EXTRA red candle that grows
-      // the longer the run lasts (replaces the old "everything gets faster" model).
-      // Caps at ~+45% extra candle chance around the 6-minute mark.
-      const extraCandleChance = Math.min(0.45, s.time * 0.0013);
+      // Rising difficulty over time, tuned for a ~2-minute run: at 120s there's a
+      // ~+40% chance of an extra red candle (caps ~+55% around 3.5 min).
+      const extraCandleChance = Math.min(0.55, s.time * 0.0033);
       if (!bA && Math.random() < extraCandleChance) {
         const ex = rand(30, s.w - 30);
         const ch = Math.random() < 0.4 ? 32 : 52;
         s.entities.push({ type: "candle", x: ex, y: -ch / 2 - 10, vy: bs * 1.05, w: 22, h: ch, rot: 0, vr: 0 });
+      }
+      // More gems over time too, so scoring opportunities scale with the danger.
+      // At 120s ~+30% chance of an extra gem (caps ~+45%).
+      const extraGemChance = Math.min(0.45, s.time * 0.0025);
+      if (!bA && Math.random() < extraGemChance) {
+        const gx = rand(30, s.w - 30);
+        const isI = Math.random() < 0.5;
+        s.entities.push({ type: isI ? "iota" : "tln", x: gx, y: -30, vy: bs * 0.95, w: 30, h: 30, rot: 0, vr: isI ? 0.04 : -0.04 });
       }
     };
 
@@ -1356,9 +1363,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       const edt = dt * slowF * worldSpeed;
       s.time += dt;
       const p = s.player;
-      // Time multiplier: the longer you survive, the more every point is worth —
-      // but only minimally. +6% per 30s, capped at ×2.5 (reached ~12.5 min).
-      const timeMult = Math.min(2.5, 1 + s.time * 0.002);
+      // Time multiplier: every point is worth more the longer you survive. Tuned
+      // for a typical ~2-minute run so the growth is felt within a normal game:
+      //   30s ≈ ×1.18, 60s ≈ ×1.36, 120s ≈ ×1.72, 180s ≈ ×2.08, capped ×3.0.
+      const timeMult = Math.min(3.0, 1 + s.time * 0.006);
       // Score multiplier (combo, max ×5) + moon boost — defined early so the
       // boss-kill reward and all collectibles can use them.
       const mult = Math.min(5, 1 + Math.floor(s.comboF / 5));
@@ -1701,11 +1709,9 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         }
         if (coll(e, p)) {
           if (e.type === "tat") {
-            // TAT coin: base 65, gets a REDUCED combo bonus (half the multiplier
-            // steps) plus moon + time multiplier. Rewards combo play without being
-            // the runaway it used to be.
-            const tatMult = 1 + (mult - 1) * 0.5; // ×1 .. ×3 instead of ×1..×5
-            const gained = Math.round(65 * tatMult * moonM * timeMult);
+            // TAT coin: base 65 with the FULL combo multiplier (like other gems),
+            // plus moon + time multiplier.
+            const gained = Math.round(65 * mult * moonM * timeMult);
             s.comboF = Math.min(25, s.comboF + 2);
             s.score += gained;
             addP(s, e.x, e.y, "#e8b84a", 32);
