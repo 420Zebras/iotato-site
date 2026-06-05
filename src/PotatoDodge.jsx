@@ -61,9 +61,16 @@ const rand = (a, b) => a + Math.random() * (b - a),
 /* Fixed logical game world. The simulation ALWAYS runs at this size so the
    difficulty (play area, gem spawn density, dodge room) is identical on phone,
    desktop, and fullscreen. The canvas is only scaled to display it. */
-const GAME_W = 760;
+/* The game world has a FIXED height (so fall speed / dodge room / difficulty is
+   constant everywhere) but its WIDTH adapts to the display aspect ratio within
+   sane bounds. This fills the screen (no black bars) while staying fair: a wider
+   screen just shows a bit more horizontal room, it doesn't change the core
+   vertical challenge. Width is clamped so ultra-wide doesn't become trivial. */
 const GAME_H = 560;
-const GAME_ASPECT = GAME_W / GAME_H;
+const GAME_W_MIN = 480; // portrait phones
+const GAME_W_DEFAULT = 760;
+const GAME_W_MAX = 1100; // very wide / fullscreen desktop
+const GAME_W = GAME_W_DEFAULT; // initial; recomputed per display in setupCanvas
 
 /* ---------- draw helpers ---------- */
 function drawBackground(ctx, s) {
@@ -650,8 +657,22 @@ const SLOT_SYMBOLS = [
   { id: "ammo", icon: "🌱", name: "Ammo", desc: ["+3 ammo", "+6 ammo", "+9 ammo"] },
   { id: "gemrain", icon: "💎", name: "Gem Rain", desc: ["Extra gems 10s", "Extra gems 15s", "Extra gems 20s"] },
   { id: "life", icon: "❤️", name: "Extra Life", desc: ["+1 max life", "+2 max life", "+3 max life"] },
-  { id: "iotato", icon: "🥔", name: "IOTATO Pull", desc: ["$TAT magnet 6s", "$TAT magnet 12s", "$TAT magnet 18s"] },
+  { id: "iotato", img: "/iotato-coin.jpg", icon: "🥔", name: "$TAT Rain", desc: ["$TAT gems 6s", "$TAT gems 12s", "$TAT gems 18s"] },
 ];
+
+// Render a slot symbol — image (real coin) if it has one, else its emoji
+function SlotIcon({ sym, size = 40 }) {
+  if (sym.img) {
+    return (
+      <img
+        src={sym.img}
+        alt={sym.name}
+        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "block" }}
+      />
+    );
+  }
+  return <span style={{ fontSize: size }}>{sym.icon}</span>;
+}
 
 function SlotMachine({ onResolve }) {
   const [reels, setReels] = useState([null, null, null]);
@@ -773,7 +794,7 @@ function SlotMachine({ onResolve }) {
                   position: "relative",
                 }}
               >
-                {SLOT_SYMBOLS[showIdx].icon}
+                <SlotIcon sym={SLOT_SYMBOLS[showIdx]} size={40} />
                 {i === 0 && settled && (
                   <div style={{ position: "absolute", bottom: 4, fontSize: 8, letterSpacing: "0.1em", color: "#e8b84a", fontWeight: 700 }}>
                     LOCKED
@@ -786,7 +807,9 @@ function SlotMachine({ onResolve }) {
 
         {phase === "done" && result ? (
           <>
-            <div style={{ marginBottom: 4, fontSize: 28 }}>{SLOT_SYMBOLS[result.symbolIndex].icon}</div>
+            <div style={{ marginBottom: 4, display: "flex", justifyContent: "center" }}>
+              <SlotIcon sym={SLOT_SYMBOLS[result.symbolIndex]} size={32} />
+            </div>
             <div style={{ fontSize: 18, fontWeight: 800, color: "#fff5d0" }}>{SLOT_SYMBOLS[result.symbolIndex].name}</div>
             <div
               style={{
@@ -913,7 +936,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         facing: 1,
         invuln: 0,
         aimX: w / 2,
-        aimY: h / 2,
+        aimY: h * 0.15,
         shootCD: 0,
         muzzle: 0,
         charge: 0,
@@ -1065,17 +1088,43 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     c.addEventListener("mousedown", onD);
     window.addEventListener("mouseup", onU);
     c.addEventListener("contextmenu", (e) => e.preventDefault());
+    // Touch aiming: dragging on the play area sets the aim direction (independent
+    // of the movement joystick / fire buttons below the canvas).
+    const toWorldTouch = (touch) => {
+      const r = c.getBoundingClientRect();
+      const v = canvasViewRef.current;
+      return {
+        x: (touch.clientX - r.left - v.offX) / v.scale,
+        y: (touch.clientY - r.top - v.offY) / v.scale,
+      };
+    };
+    const onTouchAim = (e) => {
+      const st = stateRef.current;
+      if (!st || !e.touches || !e.touches.length) return;
+      const w = toWorldTouch(e.touches[0]);
+      st.player.aimX = w.x;
+      st.player.aimY = w.y;
+      e.preventDefault();
+    };
+    c.addEventListener("touchstart", onTouchAim, { passive: false });
+    c.addEventListener("touchmove", onTouchAim, { passive: false });
     return () => {
       c.removeEventListener("mousemove", onM);
       c.removeEventListener("mousedown", onD);
       window.removeEventListener("mouseup", onU);
+      c.removeEventListener("touchstart", onTouchAim);
+      c.removeEventListener("touchmove", onTouchAim);
     };
   }, []);
 
-  // Size the canvas backing store to the fixed game world and set a transform so
-  // all drawing uses GAME_W×GAME_H coordinates, scaled to fill the element while
-  // preserving aspect ratio (letterboxed). Keeps gameplay identical at any size.
-  const setupCanvas = () => {
+  // Size the canvas to fill its element. World HEIGHT is fixed (GAME_H); world
+  // WIDTH is derived from the element's aspect ratio (clamped) so the play area
+  // fills the screen with no black bars, while vertical difficulty stays constant.
+  const computeWorldW = (rect) => {
+    const aspect = rect.width / rect.height;
+    return clamp(Math.round(GAME_H * aspect), GAME_W_MIN, GAME_W_MAX);
+  };
+  const setupCanvas = (s) => {
     const c = canvasRef.current;
     if (!c) return null;
     const rect = c.getBoundingClientRect();
@@ -1083,20 +1132,23 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     c.width = Math.round(rect.width * dpr);
     c.height = Math.round(rect.height * dpr);
     const ctx = c.getContext("2d");
-    // scale so the fixed world fits inside the element, centered (letterbox)
-    const scale = Math.min(rect.width / GAME_W, rect.height / GAME_H);
-    const offX = (rect.width - GAME_W * scale) / 2;
-    const offY = (rect.height - GAME_H * scale) / 2;
-    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * offX, dpr * offY);
-    canvasViewRef.current = { scale, offX, offY, dpr };
+    const worldW = s ? s.w : computeWorldW(rect);
+    // Uniform scale by height so nothing is stretched; world fills width by design.
+    const scale = rect.height / GAME_H;
+    // Center horizontally if the clamped world is narrower than the element
+    const offX = (rect.width - worldW * scale) / 2;
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * offX, 0);
+    canvasViewRef.current = { scale, offX, offY: 0, dpr };
     return ctx;
   };
 
   const start = () => {
     const c = canvasRef.current;
     if (!c) return;
-    setupCanvas();
-    stateRef.current = mkState(GAME_W, GAME_H);
+    const rect = c.getBoundingClientRect();
+    const worldW = computeWorldW(rect);
+    stateRef.current = mkState(worldW, GAME_H);
+    setupCanvas(stateRef.current);
     setOver(false);
     setRunning(true);
     // Tell the floating mascot to clear off-screen so the player can focus.
@@ -1110,7 +1162,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     if (!running) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
-    setupCanvas();
+    setupCanvas(stateRef.current);
     let raf;
 
     const addP = (s, x, y, col, n = 12, spd = 160) => {
@@ -1390,12 +1442,13 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             x: gx, y: -30, vy: gbs * 0.95, w: 30, h: 30, rot: 0, vr: 0.04,
           });
         }
-        // IOTATO buff: spawn an IOTA+TLN pair close together so $TAT coins form more often
-        if (s.buffIotato > 0) {
+        // IOTATO buff: OCCASIONALLY spawn an IOTA+TLN pair so a few extra $TAT coins
+        // form — but not so often that normal gems disappear.
+        if (s.buffIotato > 0 && Math.random() < 0.22) {
           const gx = rand(60, s.w - 60);
           const gbs = 120 + s.level * 26;
-          s.entities.push({ type: "iota", x: gx - 16, y: -30, vy: gbs * 0.9, w: 30, h: 30, rot: 0, vr: 0.04 });
-          s.entities.push({ type: "tln", x: gx + 16, y: -34, vy: gbs * 0.9, w: 30, h: 30, rot: 0, vr: -0.04 });
+          s.entities.push({ type: "iota", x: gx - 18, y: -30, vy: gbs * 0.9, w: 30, h: 30, rot: 0, vr: 0.04 });
+          s.entities.push({ type: "tln", x: gx + 18, y: -34, vy: gbs * 0.9, w: 30, h: 30, rot: 0, vr: -0.04 });
         }
         s.spawnT = Math.max(0.16, 0.85 - s.level * 0.06);
       }
@@ -1504,16 +1557,17 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         let kill = false;
         if (s.boss) {
           const b = s.boss;
-          if (Math.abs(sh.x - b.x) < 50 && Math.abs(sh.y - b.y) < 42 && b.hp > 0) {
-            const dmg = sh.charged ? 3 : 1;
+          if (Math.abs(sh.x - b.x) < 50 && Math.abs(sh.y - b.y) < 42 && b.hp > 0 && !sh._hitBoss) {
+            const dmg = sh.charged ? 2 : 1;
             b.hp -= dmg;
             b.hitFlash = 0.25;
             s.score += 20 * dmg;
             addP(s, sh.x, sh.y, "#6fbf73", 12);
             addT(s, sh.x, sh.y, `-${dmg}`, "#6fbf73");
-            if (sh.charged && sh.pierce > 0) {
-              sh.pierce--;
-            } else kill = true;
+            // A shot can only damage the boss ONCE (pierce only lets it pass through
+            // regular objects, not re-hit the boss every frame).
+            sh._hitBoss = true;
+            kill = true;
             if (b.hp <= 0) {
               s.bossesDefeated++;
               s.nextBossLevel = s.level + 4;
@@ -1570,9 +1624,9 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           if ((aIota && bTln) || (aTln && bIota)) {
             const dx = ea.x - eb.x, dy = ea.y - eb.y;
             const dd = Math.hypot(dx, dy);
-            // IOTATO buff: gently pull a nearby IOTA+TLN pair together so they merge more often
-            if (s.buffIotato > 0 && dd > (ea.w + eb.w) / 2 && dd < 180) {
-              const pull = 90 * dt;
+            // IOTATO buff: gently nudge a nearby IOTA+TLN pair together (subtle, short range)
+            if (s.buffIotato > 0 && dd > (ea.w + eb.w) / 2 && dd < 90) {
+              const pull = 35 * dt;
               const ux = dx / (dd || 1), uy = dy / (dd || 1);
               ea.x -= ux * pull; ea.y -= uy * pull;
               eb.x += ux * pull; eb.y += uy * pull;
@@ -1736,9 +1790,17 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       }
 
       /* DRAW */
+      // Adapt world width if the display aspect changed a lot (e.g. entered
+      // fullscreen or rotated). Keep player in-bounds after a resize.
+      const rectNow = canvas.getBoundingClientRect();
+      const desiredW = clamp(Math.round(GAME_H * (rectNow.width / rectNow.height)), GAME_W_MIN, GAME_W_MAX);
+      if (Math.abs(desiredW - s.w) > 8) {
+        s.w = desiredW;
+        if (s.player.x > s.w - 20) s.player.x = s.w - 20;
+      }
       // Re-apply transform each frame so fullscreen/resize is handled live.
-      setupCanvas();
-      // Clear the ENTIRE backing store (including letterbox bars) in device space
+      setupCanvas(s);
+      // Clear the ENTIRE backing store (including any side margin) in device space
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = "#05090f";
@@ -2041,12 +2103,28 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
   /* mobile detection + fullscreen */
   const [isTouch, setIsTouch] = useState(false);
   const [isFs, setIsFs] = useState(false);
+  const [portrait, setPortrait] = useState(false);
   const wrapRef = useRef(null);
   useEffect(() => {
     setIsTouch(window.matchMedia("(hover: none), (pointer: coarse)").matches);
-    const onFs = () => setIsFs(!!document.fullscreenElement);
+    const onOrient = () => setPortrait(window.innerHeight > window.innerWidth);
+    onOrient();
+    const onFs = () => {
+      const fs = !!document.fullscreenElement;
+      setIsFs(fs);
+      // On phones, try to lock to landscape when entering fullscreen.
+      if (fs && screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock("landscape").catch(() => {});
+      }
+    };
     document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
+    window.addEventListener("resize", onOrient);
+    window.addEventListener("orientationchange", onOrient);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      window.removeEventListener("resize", onOrient);
+      window.removeEventListener("orientationchange", onOrient);
+    };
   }, []);
   const toggleFullscreen = () => {
     const el = wrapRef.current;
@@ -2347,6 +2425,29 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
               closeSlot();
             }}
           />
+        )}
+        {isFs && isTouch && portrait && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 50,
+              background: "rgba(5,9,15,0.96)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 16,
+              textAlign: "center",
+              padding: 24,
+            }}
+          >
+            <div style={{ fontSize: 56, animation: "rotateHint 2s ease-in-out infinite" }}>📱</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#fff5d0" }}>Rotate your phone</div>
+            <div style={{ fontSize: 13, color: "rgba(231,226,214,0.7)", maxWidth: "28ch" }}>
+              Turn your device sideways for the full-screen Potato Dodge experience.
+            </div>
+          </div>
         )}
       </div>
 
