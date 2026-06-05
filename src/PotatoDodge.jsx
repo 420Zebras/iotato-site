@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
 /* ============================================================
-   POTATO DODGE — v3 "Deep Cuts"  (standalone playable demo)
-   New: dash + i-frames, charge shot, soft combo, perfect-dodge
-   slow-mo, streak multiplier, boss enrage phase, juice.
+   POTATO DODGE — competition build
+   Mechanics: move + double-jump, charge shot (3× boss dmg, pierces),
+   unified combo (max ×5), IOTA+TLN → $TAT merge, boss fights with
+   rage timer, bonus slot machine on boss kill, rare heart drops.
+   Mobile: on-screen joystick + jump/shoot buttons. Fullscreen support.
    ============================================================ */
 
 /* Preload the real logo images so gems show the authentic IOTA & TokenLabs marks.
@@ -64,15 +66,30 @@ function drawBackground(ctx, s) {
     g.addColorStop(0.45, "#160a1c");
     g.addColorStop(1, "#050208");
   } else {
-    g.addColorStop(0, "#0c1a14");
+    g.addColorStop(0, "#0c1f17");
     g.addColorStop(0.5, "#0a1612");
     g.addColorStop(1, "#04080a");
   }
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, s.w, s.h);
+
+  // Soft nebula glows for depth (cheap: two large radial gradients)
+  if (!s.boss) {
+    const n1 = ctx.createRadialGradient(s.w * 0.2, s.h * 0.3, 10, s.w * 0.2, s.h * 0.3, s.w * 0.5);
+    n1.addColorStop(0, "rgba(79,214,196,0.07)");
+    n1.addColorStop(1, "rgba(79,214,196,0)");
+    ctx.fillStyle = n1;
+    ctx.fillRect(0, 0, s.w, s.h);
+    const n2 = ctx.createRadialGradient(s.w * 0.85, s.h * 0.55, 10, s.w * 0.85, s.h * 0.55, s.w * 0.5);
+    n2.addColorStop(0, "rgba(111,91,214,0.06)");
+    n2.addColorStop(1, "rgba(111,91,214,0)");
+    ctx.fillStyle = n2;
+    ctx.fillRect(0, 0, s.w, s.h);
+  }
+
   const mx = s.w * 0.78,
     my = s.h * 0.16;
-  const mg = ctx.createRadialGradient(mx, my, 4, mx, my, 100);
+  const mg = ctx.createRadialGradient(mx, my, 4, mx, my, 110);
   if (s.boss) {
     mg.addColorStop(0, "rgba(255,90,140,0.45)");
     mg.addColorStop(0.5, "rgba(160,74,214,0.16)");
@@ -84,15 +101,25 @@ function drawBackground(ctx, s) {
   }
   ctx.fillStyle = mg;
   ctx.beginPath();
-  ctx.arc(mx, my, 100, 0, Math.PI * 2);
+  ctx.arc(mx, my, 110, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = s.boss ? "rgba(220,180,200,0.28)" : "rgba(230,222,200,0.55)";
+  // Moon disc with a subtle crater shading
+  ctx.fillStyle = s.boss ? "rgba(220,180,200,0.28)" : "rgba(230,222,200,0.6)";
   ctx.beginPath();
   ctx.arc(mx, my, 24, 0, Math.PI * 2);
   ctx.fill();
+  if (!s.boss) {
+    ctx.fillStyle = "rgba(180,180,150,0.25)";
+    ctx.beginPath();
+    ctx.arc(mx + 8, my - 6, 5, 0, Math.PI * 2);
+    ctx.arc(mx - 7, my + 5, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Twinkling stars
   for (const st of s.stars) {
-    ctx.globalAlpha = (0.4 + st.z * 0.5) * (s.boss ? 0.6 : 1);
-    ctx.fillStyle = s.boss ? "#d04ab8" : "#7fcf83";
+    const tw = 0.5 + 0.5 * Math.sin(s.time * 2.5 + st.x * 0.05);
+    ctx.globalAlpha = (0.3 + st.z * 0.5) * tw * (s.boss ? 0.6 : 1);
+    ctx.fillStyle = s.boss ? "#d04ab8" : "#9fe6a3";
     ctx.beginPath();
     ctx.arc(st.x, st.y, st.size * st.z, 0, Math.PI * 2);
     ctx.fill();
@@ -139,16 +166,6 @@ function drawPlayer(ctx, p) {
   const sX = jmp ? 0.95 : 1;
   const lS = jmp ? 0 : Math.sin(p.animPhase) * 3;
   const f = p.facing || 1;
-  if (p.dashTime > 0) {
-    for (let i = 1; i <= 4; i++) {
-      ctx.globalAlpha = 0.12 * (1 - i / 5);
-      ctx.fillStyle = C.iota;
-      ctx.beginPath();
-      ctx.ellipse(x - p.vx * 0.012 * i, y, 25, 30, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  }
   const sa = Math.max(0.05, 0.25 - (p.groundY - y) * 0.001);
   ctx.fillStyle = `rgba(79,214,196,${sa})`;
   ctx.beginPath();
@@ -629,13 +646,13 @@ const SLOT_SYMBOLS = [
 ];
 
 function SlotMachine({ onResolve }) {
-  const [reels, setReels] = React.useState([null, null, null]);
-  const [spinIdx, setSpinIdx] = React.useState([0, 0, 0]);
-  const [phase, setPhase] = React.useState("spinning");
-  const [result, setResult] = React.useState(null);
-  const resolvedRef = React.useRef(false);
+  const [reels, setReels] = useState([null, null, null]);
+  const [spinIdx, setSpinIdx] = useState([0, 0, 0]);
+  const [phase, setPhase] = useState("spinning");
+  const [result, setResult] = useState(null);
+  const resolvedRef = useRef(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const N = SLOT_SYMBOLS.length;
     const r1 = Math.floor(Math.random() * N);
     const r2 = Math.random() < 0.42 ? r1 : (r1 + 1 + Math.floor(Math.random() * (N - 1))) % N;
@@ -812,9 +829,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     combo: 0,
     mult: 1,
     ammo: 3,
-    streak: 0,
     charge: 0,
-    dashCD: 0,
     bossHp: 0,
     bossHpMax: 0,
     boss: false,
@@ -889,14 +904,11 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         aimY: h / 2,
         shootCD: 0,
         muzzle: 0,
-        dashTime: 0,
-        dashCD: 0,
         charge: 0,
         coyote: 0,
       },
-      keys: { left: false, right: false, up: false, jumpQ: false, shoot: false, shootRel: false, dashQ: false },
-      touch: { x: null, dir: 0, jumpQ: false, shoot: false, dashQ: false },
-      tap: { lastLeft: 0, lastRight: 0 },
+      keys: { left: false, right: false, up: false, jumpQ: false, shoot: false, shootRel: false },
+      touch: { x: null, dir: 0, jumpQ: false, shootHold: false, shootRel: false },
       entities: [],
       shots: [],
       parts: [],
@@ -949,7 +961,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       bossIntro: 0,
       levelFlash: 0,
       tierUpFlash: 0,
-      perfectFlash: 0,
       ammo: 3 + getBonusAmmo(),
     }),
     [],
@@ -962,30 +973,16 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       if (!st) return;
       const k = st.keys;
       if (["ArrowLeft", "a", "A"].includes(e.key)) {
-        if (down && !k.left) {
-          const now = performance.now();
-          if (now - st.tap.lastLeft < 260) k.dashQ = "left";
-          st.tap.lastLeft = now;
-        }
         k.left = down;
         e.preventDefault?.();
       }
       if (["ArrowRight", "d", "D"].includes(e.key)) {
-        if (down && !k.right) {
-          const now = performance.now();
-          if (now - st.tap.lastRight < 260) k.dashQ = "right";
-          st.tap.lastRight = now;
-        }
         k.right = down;
         e.preventDefault?.();
       }
       if (["ArrowUp", "w", "W"].includes(e.key)) {
         if (down && !k.up) k.jumpQ = true;
         k.up = down;
-        e.preventDefault?.();
-      }
-      if (["Shift"].includes(e.key)) {
-        if (down) k.dashQ = st.player.facing > 0 ? "right" : "left";
         e.preventDefault?.();
       }
       if (["f", "F", " "].includes(e.key)) {
@@ -1093,7 +1090,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     };
     const coll = (a, b) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2;
     const hurt = (s, x, y, col = "#ff5a6a") => {
-      if (s.player.dashTime > 0 || s.player.invuln > 0) return false; // i-frames
+      if (s.player.invuln > 0) return false; // i-frames after a hit
       if (s.shield > 0) {
         s.shield -= 1;
         addP(s, x, y, "#e8b84a", 18);
@@ -1251,6 +1248,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       const edt = dt * slowF * worldSpeed;
       s.time += dt;
       const p = s.player;
+      // Score multiplier (combo, max ×5) + moon boost — defined early so the
+      // boss-kill reward and all collectibles can use them.
+      const mult = Math.min(5, 1 + Math.floor(s.comboF / 5));
+      const moonM = s.moonBoost > 0 ? 2 : 1;
       const nl = 1 + Math.floor(s.time / 12);
       if (nl !== s.level) {
         s.level = nl;
@@ -1261,8 +1262,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       if (p.shootCD > 0) p.shootCD -= dt;
       if (p.muzzle > 0) p.muzzle -= dt;
       if (p.invuln > 0) p.invuln -= dt;
-      if (p.dashTime > 0) p.dashTime -= dt;
-      if (p.dashCD > 0) p.dashCD -= dt;
       if (p.coyote > 0) p.coyote -= dt;
       // shooting model:
       //  - holding builds charge (NO auto-fire while held)
@@ -1290,35 +1289,18 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         p.charge = 0;
         s.touch.shootRel = false;
       }
-      // dash trigger
-      const dq = s.keys.dashQ || s.touch.dashQ;
-      if (dq && p.dashCD <= 0) {
-        const dir = dq === "left" ? -1 : 1;
-        p.dashTime = 0.18;
-        p.dashCD = 0.9;
-        p.vx = dir * 1800;
-        p.facing = dir;
-        addP(s, p.x, p.y, C.iota, 10);
-        addT(s, p.x, p.y - 30, "DASH", "#4fd6c4");
-      }
-      s.keys.dashQ = false;
-      s.touch.dashQ = false;
       // movement
       const spd = 380;
-      if (p.dashTime <= 0) {
-        if (s.touch.dir != null && s.touch.dir !== 0) {
-          // Joystick: dir is -1..1
-          p.vx = clamp(s.touch.dir * spd, -spd, spd);
-        } else if (s.touch.x != null) {
-          p.vx = clamp((s.touch.x - p.x) * 9, -spd, spd);
-        } else {
-          let v = 0;
-          if (s.keys.left) v -= spd;
-          if (s.keys.right) v += spd;
-          p.vx = v;
-        }
+      if (s.touch.dir != null && s.touch.dir !== 0) {
+        // Joystick: dir is -1..1. Response curve so small tilts are gentle (less twitchy).
+        const d = s.touch.dir;
+        const eased = Math.sign(d) * Math.pow(Math.abs(d), 1.6);
+        p.vx = clamp(eased * spd, -spd, spd);
       } else {
-        p.vx *= 0.92;
+        let v = 0;
+        if (s.keys.left) v -= spd;
+        if (s.keys.right) v += spd;
+        p.vx = v;
       }
       if (p.vx > 5) p.facing = 1;
       else if (p.vx < -5) p.facing = -1;
@@ -1470,7 +1452,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         let kill = false;
         if (s.boss) {
           const b = s.boss;
-          if (Math.abs(sh.x - b.x) < 50 && Math.abs(sh.y - b.y) < 42) {
+          if (Math.abs(sh.x - b.x) < 50 && Math.abs(sh.y - b.y) < 42 && b.hp > 0) {
             const dmg = sh.charged ? 3 : 1;
             b.hp -= dmg;
             b.hitFlash = 0.25;
@@ -1523,9 +1505,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       s.score += dt * 5;
       // Combo decays slowly over time, resets to 0 on hit (handled in damage())
       if (s.comboF > 0) s.comboF = Math.max(0, s.comboF - dt * 0.45);
-      // Each 5 combo points = +1× multiplier, capped at ×5
-      const mult = Math.min(5, 1 + Math.floor(s.comboF / 5));
-      const moonM = s.moonBoost > 0 ? 2 : 1;
       // entities
       // --- TAT MERGE: when an IOTA gem and a TLN gem touch, they fuse into a $TAT coin ---
       for (let a = 0; a < s.entities.length; a++) {
@@ -1575,17 +1554,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           if (d < 220) {
             e.x += (dx / (d || 1)) * 600 * dt;
             e.y += (dy / (d || 1)) * 600 * dt;
-          }
-        }
-        // perfect dodge detection (near miss while dashing/iframe on hazards)
-        if ((p.dashTime > 0 || p.invuln > 0.95) && ["candle", "rock", "fud"].includes(e.type)) {
-          const d = Math.hypot(e.x - p.x, e.y - p.y);
-          if (d < 28 && !e._pd) {
-            e._pd = true;
-            s.slowMo = 0.35;
-            s.perfectFlash = 1;
-            s.score += 30 * moonM;
-            addT(s, p.x, p.y - 40, "PERFECT!", "#4fd6c4", true);
           }
         }
         if (e.y > s.h + 60 || e.x < -100 || e.x > s.w + 100) {
@@ -1695,7 +1663,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         "buffGemRain",
         "levelFlash",
         "bossIntro",
-        "perfectFlash",
         "tierUpFlash",
       ].forEach((k) => {
         if (s[k] > 0) s[k] -= dt;
@@ -1837,7 +1804,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           ctx.restore();
         }
       }
-      if (p.invuln <= 0 || Math.floor(p.invuln * 12) % 2 === 0 || p.dashTime > 0) drawPlayer(ctx, p);
+      if (p.invuln <= 0 || Math.floor(p.invuln * 12) % 2 === 0) drawPlayer(ctx, p);
       // aim + charge ring
       const aDx = p.aimX - p.x,
         aDy = p.aimY - p.y,
@@ -1879,7 +1846,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         ctx.arc(p.x, p.y - 4, 42, 0, Math.PI * 2);
         ctx.stroke();
       }
-      if (s.magnet > 0) {
+      if ((s.magnet > 0 || s.buffMagnet > 0)) {
         ctx.strokeStyle = `rgba(255,107,181,${0.3 + Math.sin(s.time * 8) * 0.2})`;
         ctx.lineWidth = 2;
         ctx.setLineDash([4, 4]);
@@ -1888,20 +1855,9 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      if (p.dashCD > 0 && p.dashTime <= 0) {
-        ctx.strokeStyle = "rgba(79,214,196,0.5)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y + 38, 8, -Math.PI / 2, -Math.PI / 2 + (1 - p.dashCD / 0.9) * Math.PI * 2);
-        ctx.stroke();
-      }
       ctx.restore();
       if (s.flash > 0) {
         ctx.fillStyle = `rgba(${s.flashColor === "#fffacd" ? "255,250,205" : "255,90,106"},${s.flash})`;
-        ctx.fillRect(0, 0, s.w, s.h);
-      }
-      if (s.perfectFlash > 0) {
-        ctx.fillStyle = `rgba(79,214,196,${s.perfectFlash * 0.2})`;
         ctx.fillRect(0, 0, s.w, s.h);
       }
       if (s.slowMo > 0) {
@@ -2002,7 +1958,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         mult,
         ammo: s.ammo,
         charge: p.charge,
-        dashCD: p.dashCD,
         bossHp: s.boss ? s.boss.hp : 0,
         bossHpMax: s.boss ? s.boss.hpMax : 0,
         boss: !!s.boss,
@@ -2214,74 +2169,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             cursor: running ? "crosshair" : "default",
           }}
         />
-        {running && (
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const st = stateRef.current;
-              if (st) st.touch.dashQ = st.player.facing > 0 ? "right" : "left";
-            }}
-            style={{
-              position: "absolute",
-              left: 16,
-              bottom: 16,
-              width: 60,
-              height: 60,
-              borderRadius: "50%",
-              background: hud.dashCD > 0 ? "rgba(80,80,80,0.4)" : "linear-gradient(135deg,#4fd6c4,#7aa8ff)",
-              color: "#08120d",
-              fontWeight: 800,
-              fontSize: 12,
-              border: "2px solid rgba(255,255,255,0.2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            className="md:hidden"
-          >
-            DASH
-          </button>
-        )}
-        {running && (
-          <button
-            onTouchStart={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const st = stateRef.current;
-              if (st) st.touch.shoot = true;
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              const st = stateRef.current;
-              if (st) {
-                if (st.touch.shoot) st.keys.shootRel = true;
-                st.touch.shoot = false;
-                st.keys.shoot = false;
-              }
-            }}
-            style={{
-              position: "absolute",
-              right: 16,
-              bottom: 16,
-              width: 76,
-              height: 76,
-              borderRadius: "50%",
-              background: hud.ammo > 0 ? "linear-gradient(135deg,#6fbf73,#4fd6c4)" : "rgba(80,80,80,0.5)",
-              color: "#08120d",
-              fontWeight: 800,
-              fontSize: 13,
-              border: "2px solid rgba(255,255,255,0.2)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            className="md:hidden"
-          >
-            <span style={{ fontSize: 20 }}>🌱</span>SHOOT
-          </button>
-        )}
         {!running && !over && (
           <Overlay>
             <h2
@@ -2297,7 +2184,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
               Survive the Bear Market
             </h2>
             <p style={{ opacity: 0.9, marginBottom: 18, maxWidth: 420 }}>
-              Dodge candles. Grab gems. Shoot sprouts. Master the dash. Crush the bear.
+              Dodge candles. Grab gems. Shoot sprouts. Build combos. Crush the bear.
             </p>
             <div
               style={{
@@ -2319,9 +2206,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
               </span>
               <span>
                 🌱 <b>Shoot</b> tap F / click
-              </span>
-              <span>
-                ⚡ <b>Dash</b> Shift · 2×tap dir
               </span>
               <span>
                 🎯 <b>Aim</b> mouse
@@ -2447,7 +2331,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         <p style={{ fontSize: 11, opacity: 0.45, margin: 0 }}>
           {isTouch
             ? "Hold SHOOT to charge a piercing shot. Joystick to move, tap JUMP (double-jump!)."
-            : "Tip: dash through hazards for a PERFECT dodge — slow-mo + bonus points. Charge your shot for 3× boss damage."}
+            : "Tip: hold SHOOT to charge a piercing shot for 3× boss damage. Merge IOTA + TLN gems into a $TAT coin for big points."}
         </p>
         <button
           onClick={toggleFullscreen}

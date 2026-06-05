@@ -16,7 +16,8 @@ const TOKENLABS_BUY_URL =
   "https://tokenlabs.network/forge/0x3493d6a80b40178d896ff5780f07ed46c940e0b3a64479839ad20cc6a1718af3";
 const CONTRACT_ADDRESS =
   "0x3493d6a80b40178d896ff5780f07ed46c940e0b3a64479839ad20cc6a1718af3";
-const COMPETITION_END = "2026-06-07T23:59:59Z";
+// Competitions run irregularly. Flip this to true when one is live, false between them.
+const COMPETITION_ACTIVE = false;
 
 const IOTA_VIDEOS = [
   {
@@ -727,7 +728,7 @@ function GameSection({ gameRef, submitScore, personalBest }) {
           <div className="eyebrow">Mini game</div>
           <h2 className="section-title">Potato Dodge</h2>
           <p className="section-lead">
-            Survive the candle storm. Collect IOTA & TLN gems. Master the dash. Crush the bear market.
+            Survive the candle storm. Collect IOTA & TLN gems. Build combos. Crush the bear market.
           </p>
         </div>
         <PotatoDodge onSubmitScore={submitScore} personalBest={personalBest} />
@@ -740,41 +741,52 @@ function GameSection({ gameRef, submitScore, personalBest }) {
    COMPETITION BANNER
    ============================================================ */
 function CompetitionBanner() {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const i = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(i);
-  }, []);
-  const endTs = new Date(COMPETITION_END).getTime();
-  const rem = endTs - now;
-  const ended = rem <= 0;
-  const d = Math.floor(rem / 86400000);
-  const h = Math.floor((rem % 86400000) / 3600000);
-  const m = Math.floor((rem % 3600000) / 60000);
-  const sec = Math.floor((rem % 60000) / 1000);
-
-  const Cell = ({ value, label }) => (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        padding: "0.65rem 0.95rem",
-        borderRadius: 12,
-        background: "rgba(20, 45, 32, 0.65)",
-        border: "1px solid rgba(232, 184, 74, 0.3)",
-        minWidth: 64,
-      }}
-    >
-      <div className="display" style={{ fontSize: "1.65rem", fontWeight: 900, color: "var(--gold-1)" }}>
-        {String(Math.max(0, value)).padStart(2, "0")}
+  if (!COMPETITION_ACTIVE) {
+    // Between competitions — tease the next one, keep people practicing.
+    return (
+      <div
+        style={{
+          padding: "1.5rem 1.75rem",
+          borderRadius: 22,
+          marginBottom: "2.5rem",
+          position: "relative",
+          overflow: "hidden",
+          background: "linear-gradient(135deg, rgba(79,214,196,0.07), rgba(232,184,74,0.05))",
+          border: "1px solid rgba(111, 191, 115, 0.28)",
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        <div style={{ position: "relative", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
+          <div>
+            <div
+              style={{
+                display: "inline-block",
+                padding: "0.3rem 0.7rem",
+                borderRadius: 999,
+                background: "rgba(111,191,115,0.18)",
+                border: "1px solid rgba(111,191,115,0.4)",
+                color: "var(--mint, #7fcf83)",
+                fontSize: "0.62rem",
+                fontWeight: 800,
+                letterSpacing: "0.2em",
+                textTransform: "uppercase",
+                marginBottom: 10,
+              }}
+            >
+              🥔 Competitions
+            </div>
+            <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.4rem", margin: "0 0 0.3rem", color: "var(--paper)" }}>
+              Next Potato Dodge Competition drops soon
+            </h3>
+            <p style={{ fontSize: "0.9rem", color: "var(--text-dim)", margin: 0, maxWidth: "48ch" }}>
+              Competitions run at random — no fixed schedule. When one starts, the{" "}
+              <b style={{ color: "var(--gold-1)" }}>top 5</b> on the leaderboard win prizes. Practice now so you're ready. Follow {X_HANDLE} for the start signal.
+            </p>
+          </div>
+        </div>
       </div>
-      <div style={{ fontSize: "0.62rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--text-faint)", marginTop: 2 }}>
-        {label}
-      </div>
-    </div>
-  );
-
+    );
+  }
   return (
     <div
       style={{
@@ -783,8 +795,8 @@ function CompetitionBanner() {
         marginBottom: "2.5rem",
         position: "relative",
         overflow: "hidden",
-        background: "linear-gradient(135deg, rgba(232,184,74,0.1), rgba(79,214,196,0.06))",
-        border: "1px solid rgba(232, 184, 74, 0.35)",
+        background: "linear-gradient(135deg, rgba(232,184,74,0.12), rgba(79,214,196,0.06))",
+        border: "1px solid rgba(232, 184, 74, 0.4)",
         backdropFilter: "blur(12px)",
       }}
     >
@@ -792,54 +804,37 @@ function CompetitionBanner() {
         style={{
           position: "absolute",
           inset: 0,
-          background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(232,184,74,0.18), transparent 60%)",
+          background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(232,184,74,0.2), transparent 60%)",
           pointerEvents: "none",
         }}
       />
-      <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
-          <div>
-            <div
-              style={{
-                display: "inline-block",
-                padding: "0.3rem 0.7rem",
-                borderRadius: 999,
-                background: "linear-gradient(90deg, var(--gold-1), var(--gold-2))",
-                color: "var(--ink)",
-                fontSize: "0.65rem",
-                fontWeight: 800,
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                marginBottom: 10,
-              }}
-            >
-              🏆 Week 1 Competition
-            </div>
-            <h3
-              style={{
-                fontFamily: "var(--font-display)",
-                fontWeight: 700,
-                fontSize: "1.5rem",
-                margin: "0 0 0.3rem",
-                color: "var(--paper)",
-              }}
-            >
-              {ended ? "Competition ended" : "Top 3 win a reward 🥔"}
-            </h3>
-            <p style={{ fontSize: "0.9rem", color: "var(--text-dim)", margin: 0, maxWidth: "42ch" }}>
-              {ended
-                ? `Winners announced on X. Follow ${X_HANDLE}.`
-                : "Play, submit your X handle, share on X. The top 3 spuds get a DM."}
-            </p>
+      <div style={{ position: "relative", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+        <div>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "0.3rem 0.7rem",
+              borderRadius: 999,
+              background: "linear-gradient(90deg, var(--gold-1), var(--gold-2))",
+              color: "var(--ink)",
+              fontSize: "0.65rem",
+              fontWeight: 800,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              marginBottom: 10,
+            }}
+          >
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#d83a3a", boxShadow: "0 0 6px #ff5a5a", animation: "pulse 1.5s infinite" }} />
+            Competition Live
           </div>
-          {!ended && (
-            <div style={{ display: "flex", gap: 8 }}>
-              <Cell value={d} label="Days" />
-              <Cell value={h} label="Hours" />
-              <Cell value={m} label="Min" />
-              <Cell value={sec} label="Sec" />
-            </div>
-          )}
+          <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.5rem", margin: "0 0 0.3rem", color: "var(--paper)" }}>
+            Top 5 win prizes 🥔
+          </h3>
+          <p style={{ fontSize: "0.9rem", color: "var(--text-dim)", margin: 0, maxWidth: "46ch" }}>
+            Set your highest score, submit with your X handle, and share on X. The top 5 spuds on the leaderboard take the prizes.
+          </p>
         </div>
       </div>
     </div>
@@ -960,7 +955,7 @@ function Leaderboard({ entries, loading, error, latestId, personalBest, lbRef })
                   </div>
                   <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {e.xHandle}
-                    {isL && rk <= 3 && (
+                    {isL && rk <= 5 && (
                       <span
                         style={{
                           marginLeft: 8,
@@ -972,7 +967,7 @@ function Leaderboard({ entries, loading, error, latestId, personalBest, lbRef })
                           fontWeight: 800,
                         }}
                       >
-                        Top 3!
+                        Top 5!
                       </span>
                     )}
                   </div>
