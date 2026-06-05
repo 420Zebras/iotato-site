@@ -384,6 +384,38 @@ export default function FloatingMascot({ onBonusUnlocked }) {
     return () => window.removeEventListener("iotato:game-area", h);
   }, []);
 
+  // Game-over taunt — mascot pops toward center and drops a cheeky line
+  useEffect(() => {
+    const TAUNTS = [
+      "lol skill issue",
+      "i could've done better",
+      "did you even try?",
+      "the bear got you, ser",
+      "back to the farm, rookie",
+      "tiny potato, big L",
+      "have you considered NOT dying?",
+      "respectfully — git gud",
+      "that's it? really?",
+      "the leaderboard is laughing",
+      "ngmi 🥔",
+      "my grandma scored higher",
+    ];
+    const h = () => {
+      if (isMobile || phaseRef.current === "hidden") return;
+      // Jump toward a visible spot near center-top of the viewport
+      const tx = window.innerWidth * 0.5 + (Math.random() - 0.5) * 200;
+      const ty = window.innerHeight * 0.32;
+      posRef.current = { x: tx, y: ty };
+      velRef.current = { vx: 0, vy: 0 };
+      restRef.current.until = Date.now() + 3500; // stand still and gloat
+      setBubble(TAUNTS[Math.floor(Math.random() * TAUNTS.length)]);
+      if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+      bubbleTimerRef.current = setTimeout(() => setBubble(null), 3500);
+    };
+    window.addEventListener("iotato:game-over", h);
+    return () => window.removeEventListener("iotato:game-over", h);
+  }, [isMobile]);
+
   useEffect(() => {
     const h = (e) => {
       mouseRef.current = { x: e.clientX, y: e.clientY, seen: true };

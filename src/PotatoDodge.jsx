@@ -10,8 +10,10 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
    Drawn into circular clips in drawGem(). */
 const iotaImg = typeof Image !== "undefined" ? new Image() : null;
 const tlnImg = typeof Image !== "undefined" ? new Image() : null;
+const tatImg = typeof Image !== "undefined" ? new Image() : null;
 if (iotaImg) iotaImg.src = "/iota-logo.png";
 if (tlnImg) tlnImg.src = "/tokenlabs.jpg";
+if (tatImg) tatImg.src = "/iotato-coin.jpg";
 
 /* Bonus ammo: unlocked by smashing the floating mascot on the website.
    Grants +2 starting ammo. Stored in localStorage by FloatingMascot. */
@@ -216,6 +218,59 @@ function drawPlayer(ctx, p) {
   }
   ctx.restore();
 }
+function drawTatCoin(ctx, size, time) {
+  const r = size / 2;
+  // pulsing golden glow
+  const pulse = 0.5 + Math.sin(time * 6) * 0.3;
+  ctx.fillStyle = `rgba(232,184,74,${0.25 * pulse})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, r + 10, 0, Math.PI * 2);
+  ctx.fill();
+  // gold base
+  ctx.fillStyle = "#e8b84a";
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  if (tatImg && tatImg.complete && tatImg.naturalWidth > 0) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 1, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(tatImg, -r, -r, size, size);
+    ctx.restore();
+  }
+  // bright rim
+  ctx.strokeStyle = "#ffe98a";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawHeart(ctx, size) {
+  const s = size / 34;
+  ctx.save();
+  ctx.scale(s, s);
+  // glow
+  ctx.fillStyle = "rgba(255,90,122,0.3)";
+  ctx.beginPath();
+  ctx.arc(0, 0, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ff5a7a";
+  ctx.beginPath();
+  ctx.moveTo(0, 10);
+  ctx.bezierCurveTo(-14, -4, -10, -16, 0, -8);
+  ctx.bezierCurveTo(10, -16, 14, -4, 0, 10);
+  ctx.closePath();
+  ctx.fill();
+  // highlight
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.beginPath();
+  ctx.ellipse(-5, -6, 3, 4, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawGem(ctx, label, color, size) {
   const r = size / 2;
   // Outer glow
@@ -559,6 +614,188 @@ function Overlay({ children }) {
 }
 
 /* ============================================================
+   BONUS SLOT MACHINE — opens after each boss kill.
+   Reel 1 stops first and LOCKS in the bonus (guaranteed, weak).
+   Reels 2 & 3 have a boosted chance to match reel 1; each match
+   upgrades the strength: 1× weak, 2× medium, 3× strong.
+   ============================================================ */
+const SLOT_SYMBOLS = [
+  { id: "magnet", icon: "🧲", name: "Magnet", desc: ["Pulls gems for 30s", "Pulls gems for 48s", "Pulls gems for 72s"] },
+  { id: "shield", icon: "🛡️", name: "Shield", desc: ["Blocks 2 hits", "Blocks 3 hits", "Blocks 4 hits"] },
+  { id: "slow", icon: "⏱️", name: "Slow Time", desc: ["Slow world 15s", "Slow world 24s", "Slow world 36s"] },
+  { id: "ammo", icon: "🌱", name: "Ammo", desc: ["+3 ammo", "+6 ammo", "+9 ammo"] },
+  { id: "gemrain", icon: "💎", name: "Gem Rain", desc: ["Extra gems 12s", "Extra gems 19s", "Extra gems 29s"] },
+  { id: "heart", icon: "❤️", name: "Extra Life", desc: ["+1 life", "+2 life", "+3 life"] },
+];
+
+function SlotMachine({ onResolve }) {
+  const [reels, setReels] = React.useState([null, null, null]);
+  const [spinIdx, setSpinIdx] = React.useState([0, 0, 0]);
+  const [phase, setPhase] = React.useState("spinning");
+  const [result, setResult] = React.useState(null);
+  const resolvedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    const N = SLOT_SYMBOLS.length;
+    const r1 = Math.floor(Math.random() * N);
+    const r2 = Math.random() < 0.42 ? r1 : (r1 + 1 + Math.floor(Math.random() * (N - 1))) % N;
+    const p3 = r2 === r1 ? 0.55 : 0.35;
+    const r3 = Math.random() < p3 ? r1 : (r1 + 1 + Math.floor(Math.random() * (N - 1))) % N;
+    const finals = [r1, r2, r3];
+
+    const settledRef = { current: [false, false, false] };
+    const settleTimes = [900, 1500, 2100];
+    const spinTimers = [];
+
+    const tick = setInterval(() => {
+      setSpinIdx((prev) => prev.map((v, i) => (settledRef.current[i] ? v : (v + 1) % N)));
+    }, 80);
+
+    finals.forEach((fin, i) => {
+      const t = setTimeout(() => {
+        settledRef.current[i] = true;
+        setReels((prev) => {
+          const nx = [...prev];
+          nx[i] = fin;
+          return nx;
+        });
+        setSpinIdx((prev) => {
+          const nx = [...prev];
+          nx[i] = fin;
+          return nx;
+        });
+      }, settleTimes[i]);
+      spinTimers.push(t);
+    });
+
+    const done = setTimeout(() => {
+      clearInterval(tick);
+      const locked = finals[0];
+      const count = finals.filter((f) => f === locked).length;
+      setResult({ symbolId: SLOT_SYMBOLS[locked].id, strength: count, symbolIndex: locked });
+      setPhase("done");
+    }, settleTimes[2] + 400);
+
+    return () => {
+      clearInterval(tick);
+      spinTimers.forEach(clearTimeout);
+      clearTimeout(done);
+    };
+  }, []);
+
+  const strengthLabel = { 1: "WEAK", 2: "MEDIUM", 3: "STRONG" };
+  const strengthColor = { 1: "#9aaa9a", 2: "#4fd6c4", 3: "#e8b84a" };
+
+  const handleClaim = () => {
+    if (resolvedRef.current || !result) return;
+    resolvedRef.current = true;
+    onResolve(result.symbolId, result.strength);
+  };
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(8,15,12,0.9)",
+        backdropFilter: "blur(10px)",
+        zIndex: 30,
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          background: "linear-gradient(160deg, rgba(30,40,32,0.96), rgba(18,26,20,0.98))",
+          border: "1px solid rgba(232,184,74,0.5)",
+          borderRadius: 20,
+          padding: "24px 24px 20px",
+          maxWidth: 420,
+          width: "100%",
+          textAlign: "center",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+        }}
+      >
+        <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#e8b84a", marginBottom: 4 }}>
+          Boss Down — Bonus Spin
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#fff5d0", marginBottom: 16 }}>🎰 Lucky Harvest</div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 18 }}>
+          {[0, 1, 2].map((i) => {
+            const settled = reels[i] != null;
+            const showIdx = settled ? reels[i] : spinIdx[i];
+            const isLockedMatch = phase === "done" && result && reels[i] === result.symbolIndex;
+            return (
+              <div
+                key={i}
+                style={{
+                  width: 90,
+                  height: 100,
+                  borderRadius: 14,
+                  background: isLockedMatch ? "rgba(232,184,74,0.18)" : "rgba(10,18,14,0.9)",
+                  border: `2px solid ${
+                    i === 0 && settled ? "#e8b84a" : isLockedMatch ? "rgba(232,184,74,0.8)" : "rgba(111,191,115,0.3)"
+                  }`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 40,
+                  transition: "all 0.2s",
+                  transform: settled ? "scale(1)" : "scale(0.96)",
+                  position: "relative",
+                }}
+              >
+                {SLOT_SYMBOLS[showIdx].icon}
+                {i === 0 && settled && (
+                  <div style={{ position: "absolute", bottom: 4, fontSize: 8, letterSpacing: "0.1em", color: "#e8b84a", fontWeight: 700 }}>
+                    LOCKED
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {phase === "done" && result ? (
+          <>
+            <div style={{ marginBottom: 4, fontSize: 28 }}>{SLOT_SYMBOLS[result.symbolIndex].icon}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#fff5d0" }}>{SLOT_SYMBOLS[result.symbolIndex].name}</div>
+            <div
+              style={{
+                display: "inline-block",
+                margin: "6px 0 2px",
+                padding: "3px 12px",
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 800,
+                letterSpacing: "0.1em",
+                color: strengthColor[result.strength],
+                border: `1px solid ${strengthColor[result.strength]}`,
+              }}
+            >
+              {strengthLabel[result.strength]} {"★".repeat(result.strength)}
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(231,226,214,0.85)", marginBottom: 16, marginTop: 6 }}>
+              {SLOT_SYMBOLS[result.symbolIndex].desc[result.strength - 1]}
+            </div>
+            <button onClick={handleClaim} style={{ ...btnPrimary, padding: "12px 36px", borderRadius: 999, fontSize: 16, width: "100%" }}>
+              Claim & Continue
+            </button>
+          </>
+        ) : (
+          <div style={{ fontSize: 13, color: "rgba(231,226,214,0.7)", minHeight: 96, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {reels[0] != null ? "Bonus locked in! Matching reels boost its power…" : "Spinning…"}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    MAIN GAME COMPONENT
    ============================================================ */
 function PotatoDodge({ onSubmitScore, personalBest }) {
@@ -584,8 +821,52 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     enraged: false,
   });
   const [finalStats, setFinalStats] = useState({ score: 0, time: 0, level: 1 });
+  const [slotOpen, setSlotOpen] = useState(false);
   const stateRef = useRef(null);
   const ammoMax = 12;
+
+  // Apply a slot-machine bonus to the live game state, scaled by strength (1=weak,2=med,3=strong)
+  const applySlotBonus = useCallback((symbolId, strength) => {
+    const s = stateRef.current;
+    if (!s) return;
+    const mag = { 1: 1, 2: 1.6, 3: 2.4 }[strength] || 1;
+    switch (symbolId) {
+      case "magnet":
+        s.buffMagnet = Math.round(30 * mag); // 30 / 48 / 72 s
+        break;
+      case "shield":
+        s.shield = Math.min(6, strength + 1); // 2 / 3 / 4 hits
+        break;
+      case "slow":
+        s.buffSlow = Math.round(15 * mag);
+        s.slow = Math.max(s.slow, s.buffSlow);
+        break;
+      case "ammo":
+        s.ammo = Math.min(ammoMax, s.ammo + strength * 3);
+        break;
+      case "gemrain":
+        s.buffGemRain = Math.round(12 * mag);
+        break;
+      case "heart":
+        // strong heal; if full, convert to points
+        for (let k = 0; k < strength; k++) {
+          if (s.lives < s.maxLives) s.lives++;
+          else s.score += 100;
+        }
+        break;
+      default:
+        break;
+    }
+  }, []);
+
+  const closeSlot = useCallback(() => {
+    const s = stateRef.current;
+    if (s) {
+      s.slotOpen = false;
+      s.lastTs = 0; // reset timing so no dt jump after pause
+    }
+    setSlotOpen(false);
+  }, []);
 
   const mkState = useCallback(
     (w, h) => ({
@@ -614,7 +895,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         coyote: 0,
       },
       keys: { left: false, right: false, up: false, jumpQ: false, shoot: false, shootRel: false, dashQ: false },
-      touch: { x: null, jumpQ: false, shoot: false, dashQ: false },
+      touch: { x: null, dir: 0, jumpQ: false, shoot: false, dashQ: false },
       tap: { lastLeft: 0, lastRight: 0 },
       entities: [],
       shots: [],
@@ -646,10 +927,15 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       moonBoost: 0,
       magnet: 0,
       comboF: 0,
-      streak: 0,
+      // active buffs from slot machine (seconds remaining)
+      buffMagnet: 0,
+      buffSlow: 0,
+      buffGemRain: 0,
+      bossRageTimer: 0,
       spawnT: 0,
       score: 0,
       lives: 3,
+      maxLives: 3,
       time: 0,
       level: 1,
       lastTs: 0,
@@ -809,14 +1095,14 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     const hurt = (s, x, y, col = "#ff5a6a") => {
       if (s.player.dashTime > 0 || s.player.invuln > 0) return false; // i-frames
       if (s.shield > 0) {
-        s.shield = 0;
+        s.shield -= 1;
         addP(s, x, y, "#e8b84a", 18);
-        addT(s, x, y, "BLOCKED", "#e8b84a");
+        addT(s, x, y, s.shield > 0 ? `BLOCKED (${s.shield})` : "BLOCKED", "#e8b84a");
+        s.player.invuln = 0.6;
         return false;
       }
       s.lives--;
-      s.comboF *= 0.5;
-      s.streak = 0;
+      s.comboF = 0; // hit fully resets combo
       s.shake = 0.45;
       s.flash = 0.3;
       s.flashColor = col;
@@ -915,7 +1201,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     };
 
     const startBoss = (s) => {
-      const hpT = [7, 9, 11];
+      const hpT = [9, 12, 15];
       const hp = hpT[Math.min(s.bossesDefeated, 2)];
       s.boss = {
         hpMax: hp,
@@ -941,17 +1227,27 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           setFinalStats({ score: Math.floor(s.score), time: s.time, level: s.level });
           setRunning(false);
           setOver(true);
+          // Tell the floating mascot to pop in and taunt the player
+          try {
+            window.dispatchEvent(new CustomEvent("iotato:game-over"));
+          } catch {}
         }
         return;
       }
       if (!s.lastTs) s.lastTs = ts;
+      // While the bonus slot machine is open, freeze the game (keep rendering last frame)
+      if (s.slotOpen) {
+        s.lastTs = ts;
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       let dt = (ts - s.lastTs) / 1000;
       if (dt > 0.05) dt = 0.05;
       s.lastTs = ts;
       const slowF = s.slowMo > 0 ? 0.35 : s.slow > 0 ? 0.5 : 1;
       // World speed multiplier — each boss kill increases speed by 25%
       // Tier 1 (start) = 1.0x, Tier 2 = 1.25x, Tier 3 = 1.5x, Tier 4 = 1.75x, etc.
-      const worldSpeed = 1 + s.bossesDefeated * 0.25;
+      const worldSpeed = 1 + s.bossesDefeated * 0.15;
       const edt = dt * slowF * worldSpeed;
       s.time += dt;
       const p = s.player;
@@ -984,6 +1280,16 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         p.charge = 0;
         s.keys.shootRel = false;
       }
+      // touch shoot — tap fires a normal shot (charge handled by hold flag)
+      if (s.touch.shootHold) {
+        p.charge = Math.min(1, p.charge + dt / 0.5);
+      }
+      if (s.touch.shootRel) {
+        if (p.charge >= 1) fire(s, true);
+        else if (p.shootCD <= 0) fire(s, false);
+        p.charge = 0;
+        s.touch.shootRel = false;
+      }
       // dash trigger
       const dq = s.keys.dashQ || s.touch.dashQ;
       if (dq && p.dashCD <= 0) {
@@ -1000,7 +1306,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       // movement
       const spd = 380;
       if (p.dashTime <= 0) {
-        if (s.touch.x != null) {
+        if (s.touch.dir != null && s.touch.dir !== 0) {
+          // Joystick: dir is -1..1
+          p.vx = clamp(s.touch.dir * spd, -spd, spd);
+        } else if (s.touch.x != null) {
           p.vx = clamp((s.touch.x - p.x) * 9, -spd, spd);
         } else {
           let v = 0;
@@ -1045,6 +1354,15 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       s.spawnT -= edt;
       if (s.spawnT <= 0) {
         spawn(s);
+        // Gem Rain buff: spawn an extra guaranteed gem each tick
+        if (s.buffGemRain > 0) {
+          const gx = rand(30, s.w - 30);
+          const gbs = 120 + s.level * 26;
+          s.entities.push({
+            type: Math.random() < 0.5 ? "iota" : "tln",
+            x: gx, y: -30, vy: gbs * 0.95, w: 30, h: 30, rot: 0, vr: 0.04,
+          });
+        }
         s.spawnT = Math.max(0.16, 0.85 - s.level * 0.06);
       }
       // lightning — also scales with world speed
@@ -1076,6 +1394,15 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         if (b.x < 80 || b.x > s.w - 80) b.dir *= -1;
         b.y = 90 + Math.sin(b.bob) * 30;
         if (b.hitFlash > 0) b.hitFlash -= dt;
+        // Rage timer: punishes camping on a boss without killing it.
+        s.bossRageTimer += dt;
+        // After 25s, boss starts ramping up attack speed; capped escalation.
+        const rageRamp = Math.max(0, s.bossRageTimer - 25);
+        b.rageMult = 1 + Math.min(1.5, rageRamp * 0.05); // up to 2.5× attack rate
+        if (rageRamp > 0 && !b._rageWarn) {
+          b._rageWarn = true;
+          addT(s, b.x, b.y, "GETTING ANGRY...", "#ff5a6a", true);
+        }
         if (!b.enraged && b.hp <= b.hpMax * 0.5) {
           b.enraged = true;
           b.vx *= 1.5;
@@ -1083,7 +1410,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           s.flashColor = "#ff5a6a";
           addT(s, b.x, b.y, "ENRAGED!", "#ff5a6a", true);
         }
-        b.atkT -= edt;
+        b.atkT -= edt * (b.rageMult || 1);
         if (b.atkT <= 0) {
           if (b.enraged) {
             b.spiralA += 0.6;
@@ -1156,13 +1483,22 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             if (b.hp <= 0) {
               s.bossesDefeated++;
               s.nextBossLevel = s.level + 4;
-              s.score += 300 * (1 + s.bossesDefeated * 0.5);
+              // Exponential reward: 300, 600, 1200, 2400... strongly rewards progressing
+              s.score += Math.round(300 * Math.pow(2, s.bossesDefeated - 1)) * moonM;
               addP(s, b.x, b.y, "#e8b84a", 50);
               addT(s, b.x, b.y, "BOSS DOWN!", "#e8b84a", true);
               s.explosions.push({ x: b.x, y: b.y, r: 0, maxR: 120, life: 0.8, max: 0.8 });
+              const bx = b.x, by = b.y;
               s.boss = null;
+              s.bossRageTimer = 0;
               s.ammo = Math.min(ammoMax, s.ammo + 4);
               s.tierUpFlash = 3.0; // Show LEVEL X banner for 3 seconds
+              // Rare heart drop (only if not at max lives)
+              if (s.lives < s.maxLives && Math.random() < 0.35) {
+                s.entities.push({ type: "heart", x: bx, y: by, vy: 60, w: 34, h: 30, rot: 0, vr: 0.03 });
+              }
+              // Trigger the bonus slot machine
+              s.pendingSlot = true;
             }
           }
         }
@@ -1183,21 +1519,56 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         }
         if (kill || sh.life <= 0 || sh.x < -30 || sh.x > s.w + 30 || sh.y > s.h + 30) s.shots.splice(i, 1);
       }
-      // score/combo
+      // score/combo — ONE unified combo system (max ×5)
       s.score += dt * 5;
-      if (s.comboF > 0) s.comboF = Math.max(0, s.comboF - dt * 0.5);
-      const combo = Math.floor(s.comboF);
-      const streakMult = 1 + Math.floor(s.streak / 5);
-      const mult = (1 + Math.floor(combo / 3)) * streakMult;
+      // Combo decays slowly over time, resets to 0 on hit (handled in damage())
+      if (s.comboF > 0) s.comboF = Math.max(0, s.comboF - dt * 0.45);
+      // Each 5 combo points = +1× multiplier, capped at ×5
+      const mult = Math.min(5, 1 + Math.floor(s.comboF / 5));
       const moonM = s.moonBoost > 0 ? 2 : 1;
       // entities
+      // --- TAT MERGE: when an IOTA gem and a TLN gem touch, they fuse into a $TAT coin ---
+      for (let a = 0; a < s.entities.length; a++) {
+        const ea = s.entities[a];
+        if (ea._merged) continue;
+        const aIota = ea.type === "iota" || ea.type === "iota_air";
+        const aTln = ea.type === "tln" || ea.type === "tln_air";
+        if (!aIota && !aTln) continue;
+        for (let b2 = a + 1; b2 < s.entities.length; b2++) {
+          const eb = s.entities[b2];
+          if (eb._merged) continue;
+          const bIota = eb.type === "iota" || eb.type === "iota_air";
+          const bTln = eb.type === "tln" || eb.type === "tln_air";
+          if (!bIota && !bTln) continue;
+          // need one IOTA and one TLN
+          if ((aIota && bTln) || (aTln && bIota)) {
+            const dx = ea.x - eb.x, dy = ea.y - eb.y;
+            if (Math.hypot(dx, dy) < (ea.w + eb.w) / 2) {
+              const mx = (ea.x + eb.x) / 2, my = (ea.y + eb.y) / 2;
+              ea._merged = true;
+              eb._merged = true;
+              // fusion flash
+              s.explosions.push({ x: mx, y: my, r: 0, maxR: 50, life: 0.45, max: 0.45, ring: "#e8b84a" });
+              addP(s, mx, my, "#e8b84a", 24);
+              addT(s, mx, my, "$TAT!", "#e8b84a", true);
+              s.entities.push({ type: "tat", x: mx, y: my, vy: Math.max(ea.vy || 60, eb.vy || 60) * 0.6, w: 40, h: 40, rot: 0, vr: 0.05, born: s.time });
+            }
+          }
+        }
+      }
+      if (s.entities.some((e) => e._merged)) {
+        s.entities = s.entities.filter((e) => !e._merged);
+      }
+
       for (let i = s.entities.length - 1; i >= 0; i--) {
         const e = s.entities[i];
         if (e.vy != null) e.y += e.vy * edt;
         if (e.vx != null) e.x += e.vx * edt;
         e.rot += e.vr;
         const isG = ["iota", "tln", "iota_air", "tln_air"].includes(e.type);
-        if (s.magnet > 0 && isG) {
+        // TAT coins and hearts are also magnet-attractable
+        const isAttract = isG || e.type === "tat" || e.type === "heart";
+        if ((s.magnet > 0 || s.buffMagnet > 0) && isAttract) {
           const dx = p.x - e.x,
             dy = p.y - e.y,
             d = Math.hypot(dx, dy);
@@ -1222,13 +1593,22 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           continue;
         }
         if (coll(e, p)) {
-          if (isG) {
+          if (e.type === "tat") {
+            // TAT coin (merged IOTA+TLN) — big points
+            const gained = Math.round(120 * mult * moonM);
+            s.comboF = Math.min(25, s.comboF + 2);
+            s.score += gained;
+            addP(s, e.x, e.y, "#e8b84a", 32);
+            addT(s, e.x, e.y, `+${gained} $TAT!`, "#e8b84a", true);
+            s.explosions.push({ x: e.x, y: e.y, r: 0, maxR: 60, life: 0.4, max: 0.4, ring: "#e8b84a" });
+            s.shake = Math.min(10, s.shake + 5);
+            s.entities.splice(i, 1);
+          } else if (isG) {
             const isAir = e.type.endsWith("_air");
             const isI = e.type.startsWith("iota");
             const depthBonus = e.y > s.h * 0.66 ? 1.5 : 1;
             const base = (isI ? 10 : 15) + (isAir ? 5 : 0);
-            s.comboF = Math.min(30, s.comboF + 1);
-            s.streak++;
+            s.comboF = Math.min(25, s.comboF + 1);
             const gained = Math.round(base * mult * moonM * depthBonus);
             s.score += gained;
             const col = isI ? "#4fd6c4" : "#7aa8ff";
@@ -1242,6 +1622,16 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             s.slow = 2.5;
             addP(s, e.x, e.y, "#e8b84a", 28);
             addT(s, e.x, e.y, "SHIELD!", "#e8b84a");
+            s.entities.splice(i, 1);
+          } else if (e.type === "heart") {
+            if (s.lives < s.maxLives) {
+              s.lives++;
+              addT(s, e.x, e.y, "+1 LIFE!", "#ff5a7a", true);
+            } else {
+              s.score += 100 * moonM;
+              addT(s, e.x, e.y, "+100", "#ff5a7a");
+            }
+            addP(s, e.x, e.y, "#ff5a7a", 26);
             s.entities.splice(i, 1);
           } else if (e.type === "moon") {
             s.score += 15;
@@ -1300,6 +1690,9 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         "slowMo",
         "moonBoost",
         "magnet",
+        "buffMagnet",
+        "buffSlow",
+        "buffGemRain",
         "levelFlash",
         "bossIntro",
         "perfectFlash",
@@ -1362,6 +1755,8 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         ctx.rotate(e.rot);
         if (e.type === "iota" || e.type === "iota_air") drawGem(ctx, "IOTA", "#4fd6c4", e.w);
         else if (e.type === "tln" || e.type === "tln_air") drawGem(ctx, "TLN", "#7aa8ff", e.w);
+        else if (e.type === "tat") drawTatCoin(ctx, e.w, s.time);
+        else if (e.type === "heart") drawHeart(ctx, e.w);
         else if (e.type === "gold") drawCoin(ctx, e.w);
         else if (e.type === "moon") drawMoonItem(ctx, e.w);
         else if (e.type === "magnet") drawMagnet(ctx, e.w);
@@ -1414,6 +1809,34 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         }
       }
       ctx.globalAlpha = 1;
+      // Combo aura — grows brighter with multiplier (visible reward feedback)
+      if (mult >= 2) {
+        const auraColors = { 2: "#6fbf73", 3: "#4fd6c4", 4: "#7aa8ff", 5: "#e8b84a" };
+        const ac = auraColors[mult] || "#e8b84a";
+        const pulse = 0.5 + Math.sin(s.time * 10) * 0.5;
+        ctx.save();
+        ctx.globalAlpha = 0.25 + 0.1 * pulse;
+        const rad = 36 + mult * 4 + pulse * 4;
+        const g = ctx.createRadialGradient(p.x, p.y - 4, rad * 0.4, p.x, p.y - 4, rad);
+        g.addColorStop(0, ac + "00");
+        g.addColorStop(0.7, ac + "55");
+        g.addColorStop(1, ac + "00");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y - 4, rad, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        // floating multiplier text above player at high combo
+        if (mult >= 3) {
+          ctx.save();
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = ac;
+          ctx.font = `bold ${14 + mult * 2}px system-ui`;
+          ctx.textAlign = "center";
+          ctx.fillText(`×${mult}`, p.x, p.y - 44 - pulse * 3);
+          ctx.restore();
+        }
+      }
       if (p.invuln <= 0 || Math.floor(p.invuln * 12) % 2 === 0 || p.dashTime > 0) drawPlayer(ctx, p);
       // aim + charge ring
       const aDx = p.aimX - p.x,
@@ -1561,22 +1984,33 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         ctx.restore();
       }
 
+      // When a boss kill flagged a slot spin, pause the loop and open the slot UI
+      if (s.pendingSlot && !s.boss) {
+        s.pendingSlot = false;
+        s.slotOpen = true;
+        setSlotOpen(true);
+      }
+
       setHud({
         score: Math.floor(s.score),
         lives: s.lives,
+        maxLives: s.maxLives,
         time: s.time,
         level: s.bossesDefeated + 1, // tier = bosses defeated + 1 (starts at 1)
         worldSpeed: worldSpeed,
-        combo,
+        combo: Math.floor(s.comboF),
         mult,
         ammo: s.ammo,
-        streak: s.streak,
         charge: p.charge,
         dashCD: p.dashCD,
         bossHp: s.boss ? s.boss.hp : 0,
         bossHpMax: s.boss ? s.boss.hpMax : 0,
         boss: !!s.boss,
         enraged: s.boss ? s.boss.enraged : false,
+        buffMagnet: s.buffMagnet,
+        buffSlow: s.buffSlow,
+        buffGemRain: s.buffGemRain,
+        shield: s.shield,
       });
       raf = requestAnimationFrame(loop);
     };
@@ -1584,50 +2018,91 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     return () => cancelAnimationFrame(raf);
   }, [running]);
 
-  /* touch */
+  /* mobile detection + fullscreen */
+  const [isTouch, setIsTouch] = useState(false);
+  const [isFs, setIsFs] = useState(false);
+  const wrapRef = useRef(null);
   useEffect(() => {
-    const c = canvasRef.current;
-    if (!c) return;
-    const gp = (e) => {
-      const r = c.getBoundingClientRect();
-      const t = e.touches ? e.touches[0] : e;
-      return { x: t.clientX - r.left, y: t.clientY - r.top, h: r.height };
-    };
-    const os = (e) => {
-      const pt = gp(e);
-      const st = stateRef.current;
-      if (!st) return;
-      if (pt.y < pt.h * 0.5) st.touch.jumpQ = true;
-      else st.touch.x = pt.x;
-      e.preventDefault();
-    };
-    const om = (e) => {
-      const pt = gp(e);
-      const st = stateRef.current;
-      if (st && st.touch.x != null) st.touch.x = pt.x;
-      e.preventDefault();
-    };
-    const oe = () => {
-      const st = stateRef.current;
-      if (st) {
-        st.touch.x = null;
-        st.touch.jumpQ = false;
-      }
-    };
-    c.addEventListener("touchstart", os, { passive: false });
-    c.addEventListener("touchmove", om, { passive: false });
-    c.addEventListener("touchend", oe);
-    return () => {
-      c.removeEventListener("touchstart", os);
-      c.removeEventListener("touchmove", om);
-      c.removeEventListener("touchend", oe);
-    };
+    setIsTouch(window.matchMedia("(hover: none), (pointer: coarse)").matches);
+    const onFs = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
+  const toggleFullscreen = () => {
+    const el = wrapRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+    }
+  };
+
+  // Joystick + button handlers (write into stateRef.touch)
+  const joyRef = useRef({ active: false, cx: 0, id: null });
+  const setDir = (d) => {
+    const st = stateRef.current;
+    if (st) st.touch.dir = d;
+  };
+  const onJoyStart = (e) => {
+    const t = e.touches ? e.touches[0] : e;
+    joyRef.current = { active: true, cx: t.clientX, id: e.touches ? t.identifier : "m" };
+    setDir(0);
+    e.preventDefault?.();
+  };
+  const onJoyMove = (e) => {
+    if (!joyRef.current.active) return;
+    let t;
+    if (e.touches) {
+      t = Array.from(e.touches).find((x) => x.identifier === joyRef.current.id) || e.touches[0];
+    } else t = e;
+    const dx = t.clientX - joyRef.current.cx;
+    const max = 50;
+    const d = clamp(dx / max, -1, 1);
+    setDir(Math.abs(d) < 0.15 ? 0 : d);
+    e.preventDefault?.();
+  };
+  const onJoyEnd = (e) => {
+    joyRef.current.active = false;
+    setDir(0);
+    e.preventDefault?.();
+  };
+  const tapJump = (e) => {
+    const st = stateRef.current;
+    if (st) st.touch.jumpQ = true;
+    e.preventDefault?.();
+  };
+  const tapShootStart = (e) => {
+    const st = stateRef.current;
+    if (st) st.touch.shootHold = true;
+    e.preventDefault?.();
+  };
+  const tapShootEnd = (e) => {
+    const st = stateRef.current;
+    if (st) {
+      st.touch.shootHold = false;
+      st.touch.shootRel = true;
+    }
+    e.preventDefault?.();
+  };
 
   const lvlProg = ((hud.time % 12) / 12) * 100;
   return (
     <div
-      style={{ width: "100%", maxWidth: 900, margin: "0 auto", fontFamily: "system-ui,sans-serif", color: "#e7e2d6" }}
+      ref={wrapRef}
+      style={{
+        width: "100%",
+        maxWidth: isFs ? "100%" : 900,
+        margin: "0 auto",
+        fontFamily: "system-ui,sans-serif",
+        color: "#e7e2d6",
+        background: isFs ? "#05090f" : "transparent",
+        padding: isFs ? "12px" : 0,
+        display: "flex",
+        flexDirection: "column",
+        height: isFs ? "100vh" : "auto",
+        justifyContent: isFs ? "center" : "flex-start",
+      }}
     >
       <div
         style={{
@@ -1648,8 +2123,13 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             value={`${hud.level}${hud.worldSpeed > 1 ? ` (${hud.worldSpeed.toFixed(2)}×)` : ""}`}
             highlight={hud.worldSpeed > 1}
           />
-          {hud.combo >= 3 && <StatBadge label="Combo" value={`×${hud.mult}`} highlight />}
-          {hud.streak >= 5 && <StatBadge label="Streak" value={`${hud.streak}🔥`} highlight />}
+          {hud.combo >= 5 && (
+            <StatBadge label="Combo" value={`×${hud.mult}${hud.mult >= 5 ? " MAX🔥" : ""}`} highlight />
+          )}
+          {hud.shield > 0 && <StatBadge label="Shield" value={`🛡️${hud.shield}`} highlight />}
+          {hud.buffMagnet > 0 && <StatBadge label="Magnet" value={`🧲${Math.ceil(hud.buffMagnet)}s`} highlight />}
+          {hud.buffSlow > 0 && <StatBadge label="Slow" value={`⏱️${Math.ceil(hud.buffSlow)}s`} highlight />}
+          {hud.buffGemRain > 0 && <StatBadge label="Gems" value={`💎${Math.ceil(hud.buffGemRain)}s`} highlight />}
         </div>
         {personalBest && (
           <div style={{ fontSize: 12, opacity: 0.7 }}>
@@ -1881,11 +2361,111 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             <GameOver stats={finalStats} onPlay={start} onSubmit={onSubmitScore} personalBest={personalBest} />
           </Overlay>
         )}
+        {slotOpen && (
+          <SlotMachine
+            onResolve={(symbolId, strength) => {
+              applySlotBonus(symbolId, strength);
+              closeSlot();
+            }}
+          />
+        )}
       </div>
-      <p style={{ fontSize: 11, opacity: 0.45, marginTop: 8, textAlign: "center" }}>
-        Tip: dash through hazards for a PERFECT dodge — slow-mo + bonus points. Charge your shot for 3× boss
-        damage.
-      </p>
+
+      {/* Mobile control bar — shown on touch devices, sits UNDER the game (no overlay) */}
+      {isTouch && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            marginTop: 10,
+            userSelect: "none",
+            touchAction: "none",
+          }}
+        >
+          {/* Joystick (left) */}
+          <div
+            onTouchStart={onJoyStart}
+            onTouchMove={onJoyMove}
+            onTouchEnd={onJoyEnd}
+            style={{
+              width: 120,
+              height: 90,
+              borderRadius: 16,
+              background: "rgba(20,30,25,0.7)",
+              border: "1px solid rgba(111,191,115,0.35)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              color: "rgba(231,226,214,0.6)",
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              position: "relative",
+            }}
+          >
+            ◀ MOVE ▶
+          </div>
+
+          {/* Shoot (top) + Jump (bottom) on the right, horizontally split */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: 120 }}>
+            <button
+              onTouchStart={tapShootStart}
+              onTouchEnd={tapShootEnd}
+              style={{
+                height: 41,
+                borderRadius: 12,
+                background: "rgba(111,191,115,0.25)",
+                border: "1px solid rgba(111,191,115,0.5)",
+                color: "#cdeccf",
+                fontWeight: 800,
+                fontSize: 14,
+              }}
+            >
+              🌱 SHOOT
+            </button>
+            <button
+              onTouchStart={tapJump}
+              style={{
+                height: 41,
+                borderRadius: 12,
+                background: "rgba(79,214,196,0.2)",
+                border: "1px solid rgba(79,214,196,0.5)",
+                color: "#bdeee8",
+                fontWeight: 800,
+                fontSize: 14,
+              }}
+            >
+              ⬆ JUMP
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, gap: 12 }}>
+        <p style={{ fontSize: 11, opacity: 0.45, margin: 0 }}>
+          {isTouch
+            ? "Hold SHOOT to charge a piercing shot. Joystick to move, tap JUMP (double-jump!)."
+            : "Tip: dash through hazards for a PERFECT dodge — slow-mo + bonus points. Charge your shot for 3× boss damage."}
+        </p>
+        <button
+          onClick={toggleFullscreen}
+          style={{
+            flexShrink: 0,
+            padding: "6px 14px",
+            borderRadius: 10,
+            background: "rgba(20,30,25,0.7)",
+            border: "1px solid rgba(111,191,115,0.35)",
+            color: "#e7e2d6",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          {isFs ? "✕ Exit Fullscreen" : "⛶ Fullscreen"}
+        </button>
+      </div>
     </div>
   );
 }
