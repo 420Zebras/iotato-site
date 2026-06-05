@@ -1117,12 +1117,14 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     };
   }, []);
 
-  // Size the canvas to fill its element. World HEIGHT is fixed (GAME_H); world
-  // WIDTH is derived from the element's aspect ratio (clamped) so the play area
-  // fills the screen with no black bars, while vertical difficulty stays constant.
-  const computeWorldW = (rect) => {
+  // Size the canvas to fill its element. World HEIGHT is fixed per device (mobile
+  // uses a smaller logical height so everything is zoomed in = bigger, easier to
+  // play on a small screen); world WIDTH is derived from the element's aspect ratio
+  // (clamped) so the play area fills the screen with no black bars.
+  const gameHRef = useRef(GAME_H);
+  const computeWorldW = (rect, gh) => {
     const aspect = rect.width / rect.height;
-    return clamp(Math.round(GAME_H * aspect), GAME_W_MIN, GAME_W_MAX);
+    return clamp(Math.round(gh * aspect), GAME_W_MIN, GAME_W_MAX);
   };
   const setupCanvas = (s) => {
     const c = canvasRef.current;
@@ -1132,9 +1134,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     c.width = Math.round(rect.width * dpr);
     c.height = Math.round(rect.height * dpr);
     const ctx = c.getContext("2d");
-    const worldW = s ? s.w : computeWorldW(rect);
+    const gh = gameHRef.current;
+    const worldW = s ? s.w : computeWorldW(rect, gh);
     // Uniform scale by height so nothing is stretched; world fills width by design.
-    const scale = rect.height / GAME_H;
+    const scale = rect.height / gh;
     // Center horizontally if the clamped world is narrower than the element
     const offX = (rect.width - worldW * scale) / 2;
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * offX, 0);
@@ -1145,9 +1148,12 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
   const start = () => {
     const c = canvasRef.current;
     if (!c) return;
+    // Mobile: smaller logical height → bigger sprites & more reaction room.
+    const touch = typeof window !== "undefined" && window.matchMedia("(hover: none), (pointer: coarse)").matches;
+    gameHRef.current = touch ? 460 : GAME_H;
     const rect = c.getBoundingClientRect();
-    const worldW = computeWorldW(rect);
-    stateRef.current = mkState(worldW, GAME_H);
+    const worldW = computeWorldW(rect, gameHRef.current);
+    stateRef.current = mkState(worldW, gameHRef.current);
     setupCanvas(stateRef.current);
     setOver(false);
     setRunning(true);
@@ -1268,17 +1274,19 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         s.entities.push({ type: "paper", x, y: -30, vy: bs * 0.85, w: 42, h: 34, rot: 0, vr: 0.03 });
       else s.entities.push({ type: "fud", x, y: -30, vy: bs * 0.7, w: 34, h: 34, rot: 0, vr: 0.06 });
 
-      // Rising difficulty over time, tuned for a ~2-minute run: at 120s there's a
-      // ~+40% chance of an extra red candle (caps ~+55% around 3.5 min).
-      const extraCandleChance = Math.min(0.55, s.time * 0.0033);
+      // Difficulty curve: a small baseline from the very start (early game isn't
+      // boring) that ramps quickly in the first ~45s, then EASES so it doesn't spike
+      // too hard around the 2-minute mark. Uses a saturating curve instead of linear.
+      //   ~10s: 14%, 30s: 24%, 60s: 32%, 120s: 38%, plateau ~40%.
+      const t = s.time;
+      const extraCandleChance = 0.08 + 0.34 * (t / (t + 55));
       if (!bA && Math.random() < extraCandleChance) {
         const ex = rand(30, s.w - 30);
         const ch = Math.random() < 0.4 ? 32 : 52;
         s.entities.push({ type: "candle", x: ex, y: -ch / 2 - 10, vy: bs * 1.05, w: 22, h: ch, rot: 0, vr: 0 });
       }
       // More gems over time too, so scoring opportunities scale with the danger.
-      // At 120s ~+30% chance of an extra gem (caps ~+45%).
-      const extraGemChance = Math.min(0.45, s.time * 0.0025);
+      const extraGemChance = 0.05 + 0.32 * (t / (t + 60));
       if (!bA && Math.random() < extraGemChance) {
         const gx = rand(30, s.w - 30);
         const isI = Math.random() < 0.5;
@@ -1832,7 +1840,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       // Adapt world width if the display aspect changed a lot (e.g. entered
       // fullscreen or rotated). Keep player in-bounds after a resize.
       const rectNow = canvas.getBoundingClientRect();
-      const desiredW = clamp(Math.round(GAME_H * (rectNow.width / rectNow.height)), GAME_W_MIN, GAME_W_MAX);
+      const desiredW = clamp(Math.round(gameHRef.current * (rectNow.width / rectNow.height)), GAME_W_MIN, GAME_W_MAX);
       if (Math.abs(desiredW - s.w) > 8) {
         s.w = desiredW;
         if (s.player.x > s.w - 20) s.player.x = s.w - 20;
@@ -2375,7 +2383,11 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           style={{
             display: "block",
             width: "100%",
-            height: isFs ? "calc(100vh - 160px)" : "min(70vh,560px)",
+            height: isFs
+              ? isTouch
+                ? "100vh" // mobile: fill the whole screen, controls overlay the bottom
+                : "calc(100vh - 90px)" // desktop fullscreen: leave room for the bar
+              : "min(70vh,560px)",
             background: "#05090f",
             touchAction: "none",
             cursor: running ? "crosshair" : "default",
@@ -2398,34 +2410,74 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             <p style={{ opacity: 0.9, marginBottom: 18, maxWidth: 420 }}>
               Dodge candles. Grab gems. Shoot sprouts. Build combos. Crush the bear.
             </p>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "4px 24px",
-                fontSize: 13,
-                opacity: 0.85,
-                textAlign: "left",
-                maxWidth: 420,
-                margin: "0 auto 18px",
-              }}
-            >
-              <span>
-                🎮 <b>Move</b> A/D · ←→
-              </span>
-              <span>
-                🦘 <b>Jump</b> W · ↑ (×2)
-              </span>
-              <span>
-                🌱 <b>Shoot</b> tap F / click
-              </span>
-              <span>
-                🎯 <b>Aim</b> mouse
-              </span>
-              <span>
-                💥 <b>Charge</b> hold, then release
-              </span>
-            </div>
+            {isTouch ? (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "4px 24px",
+                  fontSize: 13,
+                  opacity: 0.85,
+                  textAlign: "left",
+                  maxWidth: 420,
+                  margin: "0 auto 14px",
+                }}
+              >
+                <span>🕹️ <b>Move</b> joystick</span>
+                <span>🦘 <b>Jump</b> button (×2)</span>
+                <span>🌱 <b>Shoot</b> button</span>
+                <span>🎯 <b>Aim</b> drag on screen</span>
+                <span>💥 <b>Charge</b> hold SHOOT</span>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "4px 24px",
+                  fontSize: 13,
+                  opacity: 0.85,
+                  textAlign: "left",
+                  maxWidth: 420,
+                  margin: "0 auto 18px",
+                }}
+              >
+                <span>
+                  🎮 <b>Move</b> A/D · ←→
+                </span>
+                <span>
+                  🦘 <b>Jump</b> W · ↑ (×2)
+                </span>
+                <span>
+                  🌱 <b>Shoot</b> tap F / click
+                </span>
+                <span>
+                  🎯 <b>Aim</b> mouse
+                </span>
+                <span>
+                  💥 <b>Charge</b> hold, then release
+                </span>
+              </div>
+            )}
+            {isTouch && !isFs && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 16px",
+                  borderRadius: 999,
+                  background: "rgba(79,214,196,0.12)",
+                  border: "1px solid rgba(79,214,196,0.4)",
+                  color: "#9fe6df",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  marginBottom: 16,
+                }}
+              >
+                ⛶ Best played in fullscreen — tap the button below
+              </div>
+            )}
             {bonusActive && (
               <div
                 style={{
@@ -2490,17 +2542,29 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         )}
       </div>
 
-      {/* Mobile control bar — shown on touch devices, sits UNDER the game (no overlay) */}
+      {/* Mobile control bar. In fullscreen it OVERLAYS the bottom of the game as a
+          semi-transparent bar (doesn't push/block the play area); otherwise it sits
+          under the game as a solid bar. */}
       {isTouch && (
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "flex-end",
             gap: 12,
-            marginTop: 10,
             userSelect: "none",
             touchAction: "none",
+            ...(isFs
+              ? {
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  padding: "0 14px 10px",
+                  zIndex: 30,
+                  pointerEvents: "none", // only the buttons themselves are interactive
+                }
+              : { marginTop: 10 }),
           }}
         >
           {/* Joystick (left) */}
@@ -2509,11 +2573,12 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             onTouchMove={onJoyMove}
             onTouchEnd={onJoyEnd}
             style={{
-              width: 120,
-              height: 90,
+              width: isFs ? 130 : 120,
+              height: isFs ? 80 : 90,
               borderRadius: 16,
-              background: "rgba(20,30,25,0.7)",
+              background: isFs ? "rgba(20,30,25,0.4)" : "rgba(20,30,25,0.7)",
               border: "1px solid rgba(111,191,115,0.35)",
+              backdropFilter: isFs ? "blur(4px)" : "none",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -2522,21 +2587,23 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
               fontWeight: 700,
               letterSpacing: "0.05em",
               position: "relative",
+              pointerEvents: "auto",
             }}
           >
             ◀ MOVE ▶
           </div>
 
-          {/* Shoot (top) + Jump (bottom) on the right, horizontally split */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: 120 }}>
+          {/* Shoot + Jump on the right */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: isFs ? 130 : 120, pointerEvents: "auto" }}>
             <button
               onTouchStart={tapShootStart}
               onTouchEnd={tapShootEnd}
               style={{
-                height: 41,
+                height: isFs ? 38 : 41,
                 borderRadius: 12,
-                background: "rgba(111,191,115,0.25)",
+                background: isFs ? "rgba(111,191,115,0.4)" : "rgba(111,191,115,0.25)",
                 border: "1px solid rgba(111,191,115,0.5)",
+                backdropFilter: isFs ? "blur(4px)" : "none",
                 color: "#cdeccf",
                 fontWeight: 800,
                 fontSize: 14,
@@ -2547,10 +2614,11 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             <button
               onTouchStart={tapJump}
               style={{
-                height: 41,
+                height: isFs ? 38 : 41,
                 borderRadius: 12,
-                background: "rgba(79,214,196,0.2)",
+                background: isFs ? "rgba(79,214,196,0.4)" : "rgba(79,214,196,0.2)",
                 border: "1px solid rgba(79,214,196,0.5)",
+                backdropFilter: isFs ? "blur(4px)" : "none",
                 color: "#bdeee8",
                 fontWeight: 800,
                 fontSize: 14,
