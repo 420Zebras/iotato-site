@@ -2242,11 +2242,13 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         fontFamily: "system-ui,sans-serif",
         color: "#e7e2d6",
         background: isFs ? "#05090f" : "transparent",
-        padding: isFs ? "12px" : 0,
+        padding: isFs ? "6px 10px" : 0,
         display: "flex",
         flexDirection: "column",
         height: isFs ? "100vh" : "auto",
-        justifyContent: isFs ? "center" : "flex-start",
+        justifyContent: "flex-start",
+        boxSizing: "border-box",
+        overflow: isFs ? "hidden" : "visible",
       }}
     >
       <div
@@ -2256,7 +2258,8 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           alignItems: "center",
           justifyContent: "space-between",
           gap: 10,
-          marginBottom: 10,
+          marginBottom: isFs ? 4 : 10,
+          flexShrink: 0,
         }}
       >
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -2372,10 +2375,11 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       <div
         style={{
           position: "relative",
-          borderRadius: 16,
+          borderRadius: isFs ? 10 : 16,
           overflow: "hidden",
           border: "1px solid rgba(111,191,115,0.25)",
           boxShadow: "0 0 50px rgba(79,214,196,0.08)",
+          ...(isFs ? { flex: "1 1 auto", minHeight: 0 } : {}),
         }}
       >
         <canvas
@@ -2383,11 +2387,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           style={{
             display: "block",
             width: "100%",
-            height: isFs
-              ? isTouch
-                ? "100vh" // mobile: fill the whole screen, controls overlay the bottom
-                : "calc(100vh - 90px)" // desktop fullscreen: leave room for the bar
-              : "min(70vh,560px)",
+            height: isFs ? "100%" : "min(70vh,560px)",
             background: "#05090f",
             touchAction: "none",
             cursor: running ? "crosshair" : "default",
@@ -2542,29 +2542,19 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         )}
       </div>
 
-      {/* Mobile control bar. In fullscreen it OVERLAYS the bottom of the game as a
-          semi-transparent bar (doesn't push/block the play area); otherwise it sits
-          under the game as a solid bar. */}
+      {/* Mobile control bar — always sits BELOW the game in normal flow so it never
+          covers the play area. Compact styling in fullscreen to save vertical space. */}
       {isTouch && (
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "flex-end",
+            alignItems: "center",
             gap: 12,
             userSelect: "none",
             touchAction: "none",
-            ...(isFs
-              ? {
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  padding: "0 14px 10px",
-                  zIndex: 30,
-                  pointerEvents: "none", // only the buttons themselves are interactive
-                }
-              : { marginTop: 10 }),
+            marginTop: isFs ? 6 : 10,
+            flexShrink: 0,
           }}
         >
           {/* Joystick (left) */}
@@ -2573,12 +2563,11 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             onTouchMove={onJoyMove}
             onTouchEnd={onJoyEnd}
             style={{
-              width: isFs ? 130 : 120,
-              height: isFs ? 80 : 90,
+              width: isFs ? 140 : 120,
+              height: isFs ? 88 : 90,
               borderRadius: 16,
-              background: isFs ? "rgba(20,30,25,0.4)" : "rgba(20,30,25,0.7)",
+              background: "rgba(20,30,25,0.7)",
               border: "1px solid rgba(111,191,115,0.35)",
-              backdropFilter: isFs ? "blur(4px)" : "none",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -2587,23 +2576,21 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
               fontWeight: 700,
               letterSpacing: "0.05em",
               position: "relative",
-              pointerEvents: "auto",
             }}
           >
             ◀ MOVE ▶
           </div>
 
           {/* Shoot + Jump on the right */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: isFs ? 130 : 120, pointerEvents: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: isFs ? 140 : 120 }}>
             <button
               onTouchStart={tapShootStart}
               onTouchEnd={tapShootEnd}
               style={{
-                height: isFs ? 38 : 41,
+                height: isFs ? 40 : 41,
                 borderRadius: 12,
-                background: isFs ? "rgba(111,191,115,0.4)" : "rgba(111,191,115,0.25)",
+                background: "rgba(111,191,115,0.25)",
                 border: "1px solid rgba(111,191,115,0.5)",
-                backdropFilter: isFs ? "blur(4px)" : "none",
                 color: "#cdeccf",
                 fontWeight: 800,
                 fontSize: 14,
@@ -2614,11 +2601,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             <button
               onTouchStart={tapJump}
               style={{
-                height: isFs ? 38 : 41,
+                height: isFs ? 40 : 41,
                 borderRadius: 12,
-                background: isFs ? "rgba(79,214,196,0.4)" : "rgba(79,214,196,0.2)",
+                background: "rgba(79,214,196,0.2)",
                 border: "1px solid rgba(79,214,196,0.5)",
-                backdropFilter: isFs ? "blur(4px)" : "none",
                 color: "#bdeee8",
                 fontWeight: 800,
                 fontSize: 14,
