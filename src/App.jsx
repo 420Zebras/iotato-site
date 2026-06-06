@@ -20,7 +20,10 @@ const CONTRACT_ADDRESS =
 const DONATE_ADDRESS =
   "0x34f6947ac4cc834dbc83f5f2d8f4c3f0339abd6a7cb7572de141abbc86f13d95";
 // Competitions run irregularly. Flip this to true when one is live, false between them.
-const COMPETITION_ACTIVE = false;
+const COMPETITION_ACTIVE = true;
+// Competition end (7-day run). Update this when you start a new competition.
+// ISO format with timezone so the countdown is the same for everyone.
+const COMPETITION_END = "2026-06-13T18:00:00+02:00";
 
 const IOTA_VIDEOS = [
   {
@@ -741,6 +744,63 @@ function GameSection({ gameRef, submitScore, personalBest }) {
 }
 
 /* ============================================================
+   COMPETITION COUNTDOWN (live-updating)
+   ============================================================ */
+function Countdown({ end }) {
+  const target = new Date(end).getTime();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const diff = Math.max(0, target - now);
+  const ended = diff <= 0;
+  const d = Math.floor(diff / 86400000);
+  const h = Math.floor((diff % 86400000) / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  const cell = (val, label) => (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 52 }}>
+      <div
+        style={{
+          fontFamily: "var(--font-display)",
+          fontWeight: 900,
+          fontSize: "1.6rem",
+          lineHeight: 1,
+          color: "var(--paper)",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {String(val).padStart(2, "0")}
+      </div>
+      <div style={{ fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-dim)", marginTop: 4 }}>
+        {label}
+      </div>
+    </div>
+  );
+  if (ended) {
+    return (
+      <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.1rem", color: "var(--gold-1)" }}>
+        ⏱ Competition ended — winners being verified
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{ fontSize: "0.62rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--teal-1)", fontWeight: 700, marginBottom: 8 }}>
+        Ends in
+      </div>
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+        {cell(d, "Days")}
+        {cell(h, "Hrs")}
+        {cell(m, "Min")}
+        {cell(s, "Sec")}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    COMPETITION BANNER
    ============================================================ */
 function CompetitionBanner() {
@@ -830,15 +890,17 @@ function CompetitionBanner() {
             }}
           >
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#d83a3a", boxShadow: "0 0 6px #ff5a5a", animation: "pulse 1.5s infinite" }} />
-            Competition Live
+            Competition Live Now
           </div>
           <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.5rem", margin: "0 0 0.3rem", color: "var(--paper)" }}>
-            Top 5 win prizes 🥔
+            The challenge is on — Top 5 win prizes 🥔
           </h3>
           <p style={{ fontSize: "0.9rem", color: "var(--text-dim)", margin: 0, maxWidth: "46ch" }}>
-            Set your highest score, submit with your X handle, and share on X. The top 5 spuds on the leaderboard take the prizes.
+            It's live! Set your highest score, submit with your X handle, and share on X. The top 5 spuds on the
+            leaderboard when the timer hits zero take the prizes.
           </p>
         </div>
+        <Countdown end={COMPETITION_END} />
       </div>
     </div>
   );

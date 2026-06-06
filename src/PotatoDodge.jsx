@@ -1301,18 +1301,22 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           vr: 0.05,
         });
       } else if (hG && r < 0.022 + sc + 0.56) {
-        const d = Math.random() < 0.5 ? 1 : -1;
-        s.entities.push({
-          type: "rock_g",
-          x: d < 0 ? s.w + 30 : -30,
-          y: s.player.groundY + 14,
-          vx: d * (220 + s.level * 18),
-          vy: 0,
-          w: 42,
-          h: 28,
-          rot: 0,
-          vr: 0,
-        });
+        // Ground rocks come in waves: 10s OFF, then 5s ON, repeating (15s cycle).
+        const groundRockOn = s.time % 15 >= 10;
+        if (groundRockOn) {
+          const d = Math.random() < 0.5 ? 1 : -1;
+          s.entities.push({
+            type: "rock_g",
+            x: d < 0 ? s.w + 30 : -30,
+            y: s.player.groundY + 14,
+            vx: d * (220 + s.level * 18),
+            vy: 0,
+            w: 42,
+            h: 28,
+            rot: 0,
+            vr: 0,
+          });
+        }
       } else if (r < 0.022 + sc + 0.7) {
         const v = Math.random();
         let cw, ch;
@@ -1766,7 +1770,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
               s.explosions.push({ x: mx, y: my, r: 0, maxR: 50, life: 0.45, max: 0.45, ring: "#e8b84a" });
               addP(s, mx, my, "#e8b84a", 24);
               addT(s, mx, my, "$TAT!", "#e8b84a", true);
-              s.entities.push({ type: "tat", x: mx, y: my, vy: Math.max(ea.vy || 60, eb.vy || 60) * 0.6, w: 40, h: 40, rot: 0, vr: 0.05, born: s.time });
+              // $TAT coins fall 20% slower than a normal IOTA/TLN gem so they're
+              // easier to grab. (Normal gem speed = bs * 0.95; bs = 120 + level*26.)
+              const gemSpeed = (120 + s.level * 26) * 0.95;
+              s.entities.push({ type: "tat", x: mx, y: my, vy: gemSpeed * 0.8, w: 40, h: 40, rot: 0, vr: 0.05, born: s.time });
             }
           }
         }
