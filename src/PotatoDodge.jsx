@@ -748,8 +748,10 @@ function SlotMachine({ onResolve }) {
         justifyContent: "center",
         background: "rgba(8,15,12,0.9)",
         backdropFilter: "blur(10px)",
-        zIndex: 30,
-        padding: 16,
+        zIndex: 40,
+        padding: 12,
+        overflowY: "auto", // short landscape screens can scroll to reach the button
+        WebkitOverflowScrolling: "touch",
       }}
     >
       <div
@@ -757,11 +759,12 @@ function SlotMachine({ onResolve }) {
           background: "linear-gradient(160deg, rgba(30,40,32,0.96), rgba(18,26,20,0.98))",
           border: "1px solid rgba(232,184,74,0.5)",
           borderRadius: 20,
-          padding: "24px 24px 20px",
+          padding: "18px 20px 16px",
           maxWidth: 420,
           width: "100%",
           textAlign: "center",
           boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+          margin: "auto", // centers when it fits, allows scroll when it doesn't
         }}
       >
         <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#e8b84a", marginBottom: 4 }}>
@@ -1104,22 +1107,69 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         y: (touch.clientY - r.top - v.offY) / v.scale,
       };
     };
-    const onTouchAim = (e) => {
+    // Mobile firing model: touching the open play area aims AND shoots. A quick
+    // tap fires a normal shot where you touched; holding builds a charge and
+    // releasing fires a charged piercing shot. Dragging moves the aim while held.
+    // The joystick/jump corners are excluded so movement/jump don't fire.
+    const aimTouchRef = { id: null };
+    const inControlZone = (clientX, clientY, r) => {
+      const fromBottom = r.bottom - clientY;
+      if (fromBottom > 95) return false; // above the control band → free play area
+      const fromLeft = clientX - r.left;
+      const fromRight = r.right - clientX;
+      return fromLeft < 150 || fromRight < 130; // joystick (left) / jump button (right)
+    };
+    const onTouchStartAim = (e) => {
       const st = stateRef.current;
-      if (!st || !e.touches || !e.touches.length) return;
-      const w = toWorldTouch(e.touches[0]);
+      if (!st) return;
+      const r = c.getBoundingClientRect();
+      for (const t of e.changedTouches) {
+        if (!inControlZone(t.clientX, t.clientY, r)) {
+          aimTouchRef.id = t.identifier;
+          const w = toWorldTouch(t);
+          st.player.aimX = w.x;
+          st.player.aimY = w.y;
+          st.touch.shootHold = true; // begin charging; release decides tap vs charged
+          st.touch.shootRel = false;
+          e.preventDefault();
+          break;
+        }
+      }
+    };
+    const onTouchMoveAim = (e) => {
+      const st = stateRef.current;
+      if (!st || aimTouchRef.id == null) return;
+      const t = Array.from(e.touches).find((x) => x.identifier === aimTouchRef.id);
+      if (!t) return;
+      const w = toWorldTouch(t);
       st.player.aimX = w.x;
       st.player.aimY = w.y;
       e.preventDefault();
     };
-    c.addEventListener("touchstart", onTouchAim, { passive: false });
-    c.addEventListener("touchmove", onTouchAim, { passive: false });
+    const onTouchEndAim = (e) => {
+      const st = stateRef.current;
+      for (const t of e.changedTouches) {
+        if (t.identifier === aimTouchRef.id) {
+          aimTouchRef.id = null;
+          if (st && st.touch.shootHold) {
+            st.touch.shootHold = false;
+            st.touch.shootRel = true; // fire on release (charge level decides tap vs charged)
+          }
+        }
+      }
+    };
+    c.addEventListener("touchstart", onTouchStartAim, { passive: false });
+    c.addEventListener("touchmove", onTouchMoveAim, { passive: false });
+    c.addEventListener("touchend", onTouchEndAim);
+    c.addEventListener("touchcancel", onTouchEndAim);
     return () => {
       c.removeEventListener("mousemove", onM);
       c.removeEventListener("mousedown", onD);
       window.removeEventListener("mouseup", onU);
-      c.removeEventListener("touchstart", onTouchAim);
-      c.removeEventListener("touchmove", onTouchAim);
+      c.removeEventListener("touchstart", onTouchStartAim);
+      c.removeEventListener("touchmove", onTouchMoveAim);
+      c.removeEventListener("touchend", onTouchEndAim);
+      c.removeEventListener("touchcancel", onTouchEndAim);
     };
   }, []);
 
@@ -1282,17 +1332,17 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
 
       // Difficulty curve: a small baseline from the very start (early game isn't
       // boring) that ramps quickly in the first ~45s, then EASES so it doesn't spike
-      // too hard around the 2-minute mark. Uses a saturating curve instead of linear.
-      //   ~10s: 14%, 30s: 24%, 60s: 32%, 120s: 38%, plateau ~40%.
+      // Rising difficulty, but gentler than before so reaching boss 3+ is realistic.
+      //   ~10s: 11%, 30s: 17%, 60s: 22%, 120s: 26%, plateau ~30%.
       const t = s.time;
-      const extraCandleChance = 0.08 + 0.34 * (t / (t + 55));
+      const extraCandleChance = 0.06 + 0.26 * (t / (t + 70));
       if (!bA && Math.random() < extraCandleChance) {
         const ex = rand(30, s.w - 30);
         const ch = Math.random() < 0.4 ? 32 : 52;
         s.entities.push({ type: "candle", x: ex, y: -ch / 2 - 10, vy: bs * 1.05, w: 22, h: ch, rot: 0, vr: 0 });
       }
-      // More gems over time too, so scoring opportunities scale with the danger.
-      const extraGemChance = 0.05 + 0.32 * (t / (t + 60));
+      // Gems still rise a bit over time so scoring keeps pace with the danger.
+      const extraGemChance = 0.05 + 0.30 * (t / (t + 60));
       if (!bA && Math.random() < extraGemChance) {
         const gx = rand(30, s.w - 30);
         const isI = Math.random() < 0.5;
@@ -1373,7 +1423,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       // Tier 1 (start) = 1.0x, Tier 2 = 1.25x, Tier 3 = 1.5x, Tier 4 = 1.75x, etc.
       // World speed rises more SLOWLY now (was 0.15) so the game stays playable
       // deep in. Difficulty instead comes from more red candles over time (below).
-      const worldSpeed = 1 + s.bossesDefeated * 0.08;
+      const worldSpeed = 1 + s.bossesDefeated * 0.06;
       const edt = dt * slowF * worldSpeed;
       s.time += dt;
       const p = s.player;
@@ -1478,13 +1528,14 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             x: gx, y: -30, vy: gbs * 0.95, w: 30, h: 30, rot: 0, vr: 0.04,
           });
         }
-        // IOTATO buff: OCCASIONALLY spawn an IOTA+TLN pair so a few extra $TAT coins
-        // form — but not so often that normal gems disappear.
-        if (s.buffIotato > 0 && Math.random() < 0.22) {
-          const gx = rand(60, s.w - 60);
+        // IOTATO ($TAT) buff: spawn IOTA+TLN PAIRS almost every tick — this is the
+        // dedicated $TAT source, so it should clearly out-produce Gem Rain for TATs.
+        // They're spawned close together and the strong pull (below) merges them.
+        if (s.buffIotato > 0 && Math.random() < 0.85) {
+          const gx = rand(70, s.w - 70);
           const gbs = 120 + s.level * 26;
-          s.entities.push({ type: "iota", x: gx - 18, y: -30, vy: gbs * 0.9, w: 30, h: 30, rot: 0, vr: 0.04 });
-          s.entities.push({ type: "tln", x: gx + 18, y: -34, vy: gbs * 0.9, w: 30, h: 30, rot: 0, vr: -0.04 });
+          s.entities.push({ type: "iota", x: gx - 26, y: -30, vy: gbs * 0.85, w: 30, h: 30, rot: 0, vr: 0.04 });
+          s.entities.push({ type: "tln", x: gx + 26, y: -36, vy: gbs * 0.85, w: 30, h: 30, rot: 0, vr: -0.04 });
         }
         s.spawnT = Math.max(0.16, 0.85 - s.level * 0.06);
       }
@@ -1676,12 +1727,20 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           if ((aIota && bTln) || (aTln && bIota)) {
             const dx = ea.x - eb.x, dy = ea.y - eb.y;
             const dd = Math.hypot(dx, dy);
-            // IOTATO buff: gently nudge a nearby IOTA+TLN pair together (subtle, short range)
-            if (s.buffIotato > 0 && dd > (ea.w + eb.w) / 2 && dd < 90) {
-              const pull = 35 * dt;
+            // IOTATO ($TAT) buff: strong, VISIBLE attraction. Big radius so an IOTA and
+            // a TLN clearly drift toward each other and fuse. The pull eases in as they
+            // get closer (smooth, not teleporting) and leaves a sparkle trail.
+            if (s.buffIotato > 0 && dd > (ea.w + eb.w) / 2 && dd < 220) {
+              // closer = stronger pull (eased), but capped so it stays watchable
+              const closeness = 1 - dd / 220; // 0 far → 1 near
+              const pull = (60 + 140 * closeness) * dt;
               const ux = dx / (dd || 1), uy = dy / (dd || 1);
               ea.x -= ux * pull; ea.y -= uy * pull;
               eb.x += ux * pull; eb.y += uy * pull;
+              // occasional sparkle between them so the merge is visible
+              if (Math.random() < 0.25) {
+                addP(s, (ea.x + eb.x) / 2, (ea.y + eb.y) / 2, "#e8b84a", 2, 60);
+              }
             }
             if (dd < (ea.w + eb.w) / 2) {
               const mx = (ea.x + eb.x) / 2, my = (ea.y + eb.y) / 2;
@@ -2223,19 +2282,6 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
     if (st) st.touch.jumpQ = true;
     e.preventDefault?.();
   };
-  const tapShootStart = (e) => {
-    const st = stateRef.current;
-    if (st) st.touch.shootHold = true;
-    e.preventDefault?.();
-  };
-  const tapShootEnd = (e) => {
-    const st = stateRef.current;
-    if (st) {
-      st.touch.shootHold = false;
-      st.touch.shootRel = true;
-    }
-    e.preventDefault?.();
-  };
 
   const lvlProg = ((hud.time % 12) / 12) * 100;
   return (
@@ -2431,9 +2477,8 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
               >
                 <span>🕹️ <b>Move</b> joystick</span>
                 <span>🦘 <b>Jump</b> button (×2)</span>
-                <span>🌱 <b>Shoot</b> button</span>
-                <span>🎯 <b>Aim</b> drag on screen</span>
-                <span>💥 <b>Charge</b> hold SHOOT</span>
+                <span>🎯 <b>Aim & shoot</b> tap screen</span>
+                <span>💥 <b>Charge</b> hold screen</span>
               </div>
             ) : (
               <div
@@ -2579,7 +2624,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             >
               ◀ MOVE ▶
             </div>
-            {/* Shoot + Jump — bottom right, side by side */}
+            {/* Jump — bottom right (shooting is done by touching the play area) */}
             <div
               style={{
                 position: "absolute",
@@ -2593,7 +2638,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
               <button
                 onTouchStart={tapJump}
                 style={{
-                  width: 72,
+                  width: 96,
                   height: 62,
                   borderRadius: 14,
                   background: "rgba(79,214,196,0.28)",
@@ -2602,28 +2647,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
                   WebkitBackdropFilter: "blur(3px)",
                   color: "#bdeee8",
                   fontWeight: 800,
-                  fontSize: 13,
+                  fontSize: 14,
                 }}
               >
                 ⬆ JUMP
-              </button>
-              <button
-                onTouchStart={tapShootStart}
-                onTouchEnd={tapShootEnd}
-                style={{
-                  width: 80,
-                  height: 62,
-                  borderRadius: 14,
-                  background: "rgba(111,191,115,0.32)",
-                  border: "1px solid rgba(111,191,115,0.6)",
-                  backdropFilter: "blur(3px)",
-                  WebkitBackdropFilter: "blur(3px)",
-                  color: "#cdeccf",
-                  fontWeight: 800,
-                  fontSize: 13,
-                }}
-              >
-                🌱 SHOOT
               </button>
             </div>
           </div>
@@ -2669,33 +2696,18 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           >
             ◀ MOVE ▶
           </div>
-          {/* Shoot + Jump on the right */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: 120 }}>
-            <button
-              onTouchStart={tapShootStart}
-              onTouchEnd={tapShootEnd}
-              style={{
-                height: 41,
-                borderRadius: 12,
-                background: "rgba(111,191,115,0.25)",
-                border: "1px solid rgba(111,191,115,0.5)",
-                color: "#cdeccf",
-                fontWeight: 800,
-                fontSize: 14,
-              }}
-            >
-              🌱 SHOOT
-            </button>
+          {/* Jump on the right (shooting is done by touching the play area) */}
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", width: 120 }}>
             <button
               onTouchStart={tapJump}
               style={{
-                height: 41,
+                height: 90,
                 borderRadius: 12,
                 background: "rgba(79,214,196,0.2)",
                 border: "1px solid rgba(79,214,196,0.5)",
                 color: "#bdeee8",
                 fontWeight: 800,
-                fontSize: 14,
+                fontSize: 15,
               }}
             >
               ⬆ JUMP
@@ -2707,7 +2719,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, gap: 12 }}>
         <p style={{ fontSize: 11, opacity: 0.45, margin: 0 }}>
           {isTouch
-            ? "Hold SHOOT to charge a piercing shot. Joystick to move, tap JUMP (double-jump!)."
+            ? "Tap the screen to aim & shoot. Hold for a charged piercing shot. Joystick to move, JUMP to double-jump."
             : "Tip: hold SHOOT to charge a piercing shot for 3× boss damage. Merge IOTA + TLN gems into a $TAT coin for big points."}
         </p>
         <button
