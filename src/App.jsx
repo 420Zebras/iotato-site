@@ -16,6 +16,9 @@ const TOKENLABS_BUY_URL =
   "https://tokenlabs.network/forge/0x3493d6a80b40178d896ff5780f07ed46c940e0b3a64479839ad20cc6a1718af3";
 const CONTRACT_ADDRESS =
   "0x3493d6a80b40178d896ff5780f07ed46c940e0b3a64479839ad20cc6a1718af3";
+// Donation wallet (IOTA Rebased). Tips support giveaways, site dev, and AI tools.
+const DONATE_ADDRESS =
+  "0x34f6947ac4cc834dbc83f5f2d8f4c3f0339abd6a7cb7572de141abbc86f13d95";
 // Competitions run irregularly. Flip this to true when one is live, false between them.
 const COMPETITION_ACTIVE = false;
 
@@ -842,6 +845,110 @@ function CompetitionBanner() {
 }
 
 /* ============================================================
+   SUPPORT / DONATE SECTION
+   ============================================================ */
+function SupportSection() {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(DONATE_ADDRESS);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+  return (
+    <section className="section" style={{ paddingTop: "1rem", paddingBottom: "1rem" }}>
+      <div className="container">
+        <div
+          style={{
+            maxWidth: 640,
+            margin: "0 auto",
+            padding: "1.5rem 1.6rem",
+            borderRadius: 16,
+            background: "rgba(15, 34, 24, 0.5)",
+            border: "1px solid var(--line-strong)",
+            textAlign: "center",
+          }}
+        >
+          <h3
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 900,
+              fontSize: "1.15rem",
+              margin: "0 0 0.5rem",
+              color: "var(--gold-1)",
+            }}
+          >
+            Support $TAT 🥔
+          </h3>
+          <p style={{ fontSize: "0.9rem", color: "var(--text-dim)", margin: "0 0 1rem", lineHeight: 1.5 }}>
+            IOTATO is a community project built for fun. If you're enjoying it and want to help it grow, any tip is
+            appreciated — donations go toward giveaways &amp; competition prizes, site development, and the AI tools
+            that keep the project moving.
+          </p>
+          <div
+            style={{
+              fontSize: "0.72rem",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--teal-1)",
+              fontWeight: 700,
+              marginBottom: "0.5rem",
+            }}
+          >
+            Donation address · IOTA Rebased
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "0.7rem 0.9rem",
+              borderRadius: 12,
+              background: "rgba(10, 18, 14, 0.6)",
+              border: "1px solid var(--line-strong)",
+            }}
+          >
+            <code
+              className="mono"
+              style={{
+                flex: 1,
+                fontSize: "0.74rem",
+                color: "var(--text-dim)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                textAlign: "left",
+              }}
+            >
+              {DONATE_ADDRESS}
+            </code>
+            <button
+              onClick={copy}
+              style={{
+                padding: "0.45rem 0.95rem",
+                borderRadius: 8,
+                background: copied ? "rgba(127, 207, 131, 0.25)" : "rgba(79, 214, 196, 0.12)",
+                border: `1px solid ${copied ? "var(--green-1)" : "rgba(79, 214, 196, 0.4)"}`,
+                color: copied ? "var(--green-1)" : "var(--teal-1)",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "all 0.15s",
+              }}
+            >
+              {copied ? "✓ Copied" : "Copy"}
+            </button>
+          </div>
+          <p style={{ fontSize: "0.8rem", color: "var(--text-dim)", margin: "0.9rem 0 0", opacity: 0.8 }}>
+            Thanks for keeping $TAT cooking. 🥔🔥
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
    LEADERBOARD
    ============================================================ */
 function Leaderboard({ entries, loading, error, latestId, personalBest, lbRef }) {
@@ -1421,6 +1528,7 @@ export default function App() {
         personalBest={personalBest}
         lbRef={lbRef}
       />
+      <SupportSection />
       <VideosSection />
 
       <section className="section" style={{ paddingTop: "2rem", paddingBottom: "2rem" }}>

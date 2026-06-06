@@ -758,21 +758,21 @@ function SlotMachine({ onResolve }) {
         style={{
           background: "linear-gradient(160deg, rgba(30,40,32,0.96), rgba(18,26,20,0.98))",
           border: "1px solid rgba(232,184,74,0.5)",
-          borderRadius: 20,
-          padding: "18px 20px 16px",
-          maxWidth: 420,
+          borderRadius: 18,
+          padding: "12px 18px 12px",
+          maxWidth: 380,
           width: "100%",
           textAlign: "center",
           boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-          margin: "auto", // centers when it fits, allows scroll when it doesn't
+          margin: "auto",
         }}
       >
-        <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#e8b84a", marginBottom: 4 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#e8b84a", marginBottom: 2 }}>
           Boss Down — Bonus Spin
         </div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#fff5d0", marginBottom: 16 }}>🎰 Lucky Harvest</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "#fff5d0", marginBottom: 10 }}>🎰 Lucky Harvest</div>
 
-        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 18 }}>
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 }}>
           {[0, 1, 2].map((i) => {
             const settled = reels[i] != null;
             const showIdx = settled ? reels[i] : spinIdx[i];
@@ -781,9 +781,9 @@ function SlotMachine({ onResolve }) {
               <div
                 key={i}
                 style={{
-                  width: 90,
-                  height: 100,
-                  borderRadius: 14,
+                  width: 72,
+                  height: 78,
+                  borderRadius: 12,
                   background: isLockedMatch ? "rgba(232,184,74,0.18)" : "rgba(10,18,14,0.9)",
                   border: `2px solid ${
                     i === 0 && settled ? "#e8b84a" : isLockedMatch ? "rgba(232,184,74,0.8)" : "rgba(111,191,115,0.3)"
@@ -791,15 +791,15 @@ function SlotMachine({ onResolve }) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 40,
+                  fontSize: 34,
                   transition: "all 0.2s",
                   transform: settled ? "scale(1)" : "scale(0.96)",
                   position: "relative",
                 }}
               >
-                <SlotIcon sym={SLOT_SYMBOLS[showIdx]} size={40} />
+                <SlotIcon sym={SLOT_SYMBOLS[showIdx]} size={34} />
                 {i === 0 && settled && (
-                  <div style={{ position: "absolute", bottom: 4, fontSize: 8, letterSpacing: "0.1em", color: "#e8b84a", fontWeight: 700 }}>
+                  <div style={{ position: "absolute", bottom: 3, fontSize: 7, letterSpacing: "0.1em", color: "#e8b84a", fontWeight: 700 }}>
                     LOCKED
                   </div>
                 )}
@@ -810,17 +810,17 @@ function SlotMachine({ onResolve }) {
 
         {phase === "done" && result ? (
           <>
-            <div style={{ marginBottom: 4, display: "flex", justifyContent: "center" }}>
-              <SlotIcon sym={SLOT_SYMBOLS[result.symbolIndex]} size={32} />
+            <div style={{ marginBottom: 2, display: "flex", justifyContent: "center" }}>
+              <SlotIcon sym={SLOT_SYMBOLS[result.symbolIndex]} size={28} />
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#fff5d0" }}>{SLOT_SYMBOLS[result.symbolIndex].name}</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#fff5d0" }}>{SLOT_SYMBOLS[result.symbolIndex].name}</div>
             <div
               style={{
                 display: "inline-block",
-                margin: "6px 0 2px",
-                padding: "3px 12px",
+                margin: "4px 0 2px",
+                padding: "2px 10px",
                 borderRadius: 999,
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: 800,
                 letterSpacing: "0.1em",
                 color: strengthColor[result.strength],
@@ -829,15 +829,15 @@ function SlotMachine({ onResolve }) {
             >
               {strengthLabel[result.strength]} {"★".repeat(result.strength)}
             </div>
-            <div style={{ fontSize: 13, color: "rgba(231,226,214,0.85)", marginBottom: 16, marginTop: 6 }}>
+            <div style={{ fontSize: 12, color: "rgba(231,226,214,0.85)", marginBottom: 10, marginTop: 4 }}>
               {SLOT_SYMBOLS[result.symbolIndex].desc[result.strength - 1]}
             </div>
-            <button onClick={handleClaim} style={{ ...btnPrimary, padding: "12px 36px", borderRadius: 999, fontSize: 16, width: "100%" }}>
+            <button onClick={handleClaim} style={{ ...btnPrimary, padding: "10px 32px", borderRadius: 999, fontSize: 15, width: "100%" }}>
               Claim & Continue
             </button>
           </>
         ) : (
-          <div style={{ fontSize: 13, color: "rgba(231,226,214,0.7)", minHeight: 96, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ fontSize: 12, color: "rgba(231,226,214,0.7)", minHeight: 72, display: "flex", alignItems: "center", justifyContent: "center" }}>
             {reels[0] != null ? "Bonus locked in! Matching reels boost its power…" : "Spinning…"}
           </div>
         )}
@@ -904,8 +904,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         s.lives += strength;
         break;
       case "iotato":
-        // Light $TAT pull: gems drift together so they merge into $TAT more often
+        // $TAT buff: turn on the pull so IOTA + TLN drift together into $TAT, and
+        // guarantee at least 4 $TAT coins by queueing 4 IOTA+TLN pairs to spawn.
         s.buffIotato = strength * 6; // 6 / 12 / 18 s
+        s.iotatoPairsPending = 4;
         break;
       default:
         break;
@@ -988,6 +990,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       buffSlow: 0,
       buffGemRain: 0,
       buffIotato: 0,
+      iotatoPairsPending: 0,
       bossRageTimer: 0,
       spawnT: 0,
       score: 0,
@@ -1332,10 +1335,11 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
 
       // Difficulty curve: a small baseline from the very start (early game isn't
       // boring) that ramps quickly in the first ~45s, then EASES so it doesn't spike
-      // Rising difficulty, but gentler than before so reaching boss 3+ is realistic.
-      //   ~10s: 11%, 30s: 17%, 60s: 22%, 120s: 26%, plateau ~30%.
+      // Time-based danger rises only a LITTLE — most extra objects come from the
+      // faster game speed at higher levels, not this ramp. Keeps boss 3+ survivable.
+      //   ~10s: 8%, 30s: 11%, 60s: 13%, 120s: 16%, plateau ~18%.
       const t = s.time;
-      const extraCandleChance = 0.06 + 0.26 * (t / (t + 70));
+      const extraCandleChance = 0.06 + 0.14 * (t / (t + 80));
       if (!bA && Math.random() < extraCandleChance) {
         const ex = rand(30, s.w - 30);
         const ch = Math.random() < 0.4 ? 32 : 52;
@@ -1423,7 +1427,7 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
       // Tier 1 (start) = 1.0x, Tier 2 = 1.25x, Tier 3 = 1.5x, Tier 4 = 1.75x, etc.
       // World speed rises more SLOWLY now (was 0.15) so the game stays playable
       // deep in. Difficulty instead comes from more red candles over time (below).
-      const worldSpeed = 1 + s.bossesDefeated * 0.06;
+      const worldSpeed = 1 + s.bossesDefeated * 0.05;
       const edt = dt * slowF * worldSpeed;
       s.time += dt;
       const p = s.player;
@@ -1528,14 +1532,23 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
             x: gx, y: -30, vy: gbs * 0.95, w: 30, h: 30, rot: 0, vr: 0.04,
           });
         }
-        // IOTATO ($TAT) buff: spawn IOTA+TLN PAIRS almost every tick — this is the
-        // dedicated $TAT source, so it should clearly out-produce Gem Rain for TATs.
-        // They're spawned close together and the strong pull (below) merges them.
-        if (s.buffIotato > 0 && Math.random() < 0.85) {
-          const gx = rand(70, s.w - 70);
+        // IOTATO ($TAT) buff. Gems otherwise spawn normally; the buff turns on the
+        // attraction so IOTA + TLN drift together into $TAT on screen.
+        //  - Guarantee ≥4 $TAT by spawning 4 queued IOTA+TLN pairs (a bit apart so the
+        //    pull is visible), then
+        //  - spawn 10% extra single gems for more merge material later in the run.
+        if (s.iotatoPairsPending > 0) {
+          s.iotatoPairsPending--;
+          const gx = rand(90, s.w - 90);
           const gbs = 120 + s.level * 26;
-          s.entities.push({ type: "iota", x: gx - 26, y: -30, vy: gbs * 0.85, w: 30, h: 30, rot: 0, vr: 0.04 });
-          s.entities.push({ type: "tln", x: gx + 26, y: -36, vy: gbs * 0.85, w: 30, h: 30, rot: 0, vr: -0.04 });
+          const spread = rand(55, 100);
+          s.entities.push({ type: "iota", x: gx - spread, y: -30, vy: gbs * 0.85, w: 30, h: 30, rot: 0, vr: 0.04 });
+          s.entities.push({ type: "tln", x: gx + spread, y: -36, vy: gbs * 0.85, w: 30, h: 30, rot: 0, vr: -0.04 });
+        } else if (s.buffIotato > 0 && Math.random() < 0.10) {
+          const gx = rand(40, s.w - 40);
+          const gbs = 120 + s.level * 26;
+          const isI = Math.random() < 0.5;
+          s.entities.push({ type: isI ? "iota" : "tln", x: gx, y: -30, vy: gbs * 0.9, w: 30, h: 30, rot: 0, vr: isI ? 0.04 : -0.04 });
         }
         s.spawnT = Math.max(0.16, 0.85 - s.level * 0.06);
       }
@@ -1614,9 +1627,11 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
                 w: 20, h: 44, rot: 0, vr: 0.08, aimed: true,
               });
             }
-            b.atkT = 0.55;
-            // Boss 5 (tier 4+): fire a quick second volley shortly after — short
-            // double-burst. Kept mild because world speed + extra candles already scale.
+            // Boss 3/4/5 fire the spiral much less often now — +4s between sprays
+            // so it's far more survivable (world speed + extra candles still scale).
+            b.atkT = 4.55;
+            // Boss 5 (tier 4+): a quick second volley right after the spray, so the
+            // attack comes as a short double-burst rather than constant fire.
             if (tier >= 4 && !b._volley) {
               b._volley = true;
               b.atkT = 0.18;
@@ -1727,17 +1742,18 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
           if ((aIota && bTln) || (aTln && bIota)) {
             const dx = ea.x - eb.x, dy = ea.y - eb.y;
             const dd = Math.hypot(dx, dy);
-            // IOTATO ($TAT) buff: strong, VISIBLE attraction. Big radius so an IOTA and
-            // a TLN clearly drift toward each other and fuse. The pull eases in as they
-            // get closer (smooth, not teleporting) and leaves a sparkle trail.
-            if (s.buffIotato > 0 && dd > (ea.w + eb.w) / 2 && dd < 220) {
-              // closer = stronger pull (eased), but capped so it stays watchable
-              const closeness = 1 - dd / 220; // 0 far → 1 near
-              const pull = (60 + 140 * closeness) * dt;
+            // IOTATO ($TAT) buff attraction. Only pull once BOTH gems are actually
+            // visible on screen (top edge passed). Start slow, then speed up after a
+            // gem has been on screen for ~1s — so the merge is clearly watchable.
+            const bothOnScreen = ea.y > ea.h / 2 && eb.y > eb.h / 2;
+            if (s.buffIotato > 0 && bothOnScreen && dd > (ea.w + eb.w) / 2 && dd < 320) {
+              const age = Math.min(ea._onScreenT || 0, eb._onScreenT || 0);
+              const speedRamp = age < 0.6 ? 0.55 : 1.15; // gentle drift, then a clear pull-together
+              const closeness = 1 - dd / 320;
+              const pull = (70 + 170 * closeness) * speedRamp * dt;
               const ux = dx / (dd || 1), uy = dy / (dd || 1);
               ea.x -= ux * pull; ea.y -= uy * pull;
               eb.x += ux * pull; eb.y += uy * pull;
-              // occasional sparkle between them so the merge is visible
               if (Math.random() < 0.25) {
                 addP(s, (ea.x + eb.x) / 2, (ea.y + eb.y) / 2, "#e8b84a", 2, 60);
               }
@@ -1764,6 +1780,8 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         if (e.vy != null) e.y += e.vy * edt;
         if (e.vx != null) e.x += e.vx * edt;
         e.rot += e.vr;
+        // Track how long a gem has been visible on screen (used by the $TAT pull ramp)
+        if (e.y > e.h / 2) e._onScreenT = (e._onScreenT || 0) + dt;
         const isG = ["iota", "tln", "iota_air", "tln_air"].includes(e.type);
         // TAT coins and hearts are also magnet-attractable
         const isAttract = isG || e.type === "tat" || e.type === "heart";
@@ -1782,9 +1800,9 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         }
         if (coll(e, p)) {
           if (e.type === "tat") {
-            // TAT coin: base 65 with the FULL combo multiplier (like other gems),
+            // TAT coin: base 80 with the FULL combo multiplier (like other gems),
             // plus moon + time multiplier.
-            const gained = Math.round(65 * mult * moonM * timeMult);
+            const gained = Math.round(80 * mult * moonM * timeMult);
             s.comboF = Math.min(25, s.comboF + 2);
             s.score += gained;
             addP(s, e.x, e.y, "#e8b84a", 32);
