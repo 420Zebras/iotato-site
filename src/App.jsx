@@ -23,7 +23,7 @@ const DONATE_ADDRESS =
 const COMPETITION_ACTIVE = true;
 // Competition end (7-day run). Update this when you start a new competition.
 // ISO format with timezone so the countdown is the same for everyone.
-const COMPETITION_END = "2026-06-14T18:00:00+02:00";
+const COMPETITION_END = "2026-06-14T11:30:00+02:00";
 
 const IOTA_VIDEOS = [
   {
