@@ -637,6 +637,7 @@ function Overlay({ children }) {
         padding: 24,
         background: "rgba(8,15,12,0.82)",
         backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
       }}
     >
       <div>{children}</div>
@@ -748,6 +749,7 @@ function SlotMachine({ onResolve }) {
         justifyContent: "center",
         background: "rgba(8,15,12,0.9)",
         backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
         zIndex: 40,
         padding: 12,
         overflowY: "auto", // short landscape screens can scroll to reach the button
@@ -2322,7 +2324,11 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         padding: isFs ? "6px 10px" : 0,
         display: "flex",
         flexDirection: "column",
-        height: isFs ? "100vh" : "auto",
+        height: isFs
+          ? typeof CSS !== "undefined" && CSS.supports?.("height: 100dvh")
+            ? "100dvh"
+            : "100vh"
+          : "auto",
         justifyContent: "flex-start",
         boxSizing: "border-box",
         overflow: isFs ? "hidden" : "visible",

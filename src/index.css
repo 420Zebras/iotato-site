@@ -62,22 +62,40 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  /* iOS: stop Safari from auto-enlarging text, and remove the grey tap flash */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS: no grey flash / text selection on interactive game + UI elements */
+button, .game-canvas, canvas {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 body {
+  background: transparent;
+  min-height: 100vh;
+}
+
+/* Fixed aurora atmosphere — a position:fixed layer (iOS-safe, unlike
+   background-attachment:fixed which Safari renders poorly). Stays put while
+   content scrolls over it. Rendered as a <div class="aurora-bg"> in the app. */
+.aurora-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background:
-    /* aurora glows */
     radial-gradient(ellipse 60% 40% at 15% 8%, rgba(232, 184, 74, 0.10), transparent 55%),
     radial-gradient(ellipse 50% 45% at 85% 25%, rgba(79, 214, 196, 0.08), transparent 60%),
     radial-gradient(ellipse 70% 50% at 50% 55%, rgba(111, 91, 214, 0.07), transparent 65%),
     radial-gradient(ellipse 60% 50% at 75% 85%, rgba(79, 214, 196, 0.06), transparent 60%),
     radial-gradient(ellipse 55% 45% at 20% 95%, rgba(232, 184, 74, 0.05), transparent 60%),
-    /* deep vertical base — midnight blue-green, not muddy */
     linear-gradient(180deg, #050d12 0%, #07140f 30%, #0a1812 55%, #081016 80%, #05090f 100%);
-  /* Keep the whole atmosphere fixed so it stays put while content scrolls over it. */
-  background-attachment: fixed;
-  background-size: cover;
-  min-height: 100vh;
 }
 
 /* Star field — fixed dots scattered across the whole page */
@@ -174,6 +192,7 @@ body::before {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   border: 1px solid var(--line-strong);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
 
@@ -202,6 +221,15 @@ body::before {
 
 @media (max-width: 768px) {
   .section { padding: 3.5rem 1.25rem; }
+  /* Hide the inline nav links on phones; logo + Connect + Buy stay */
+  .nav-links { display: none !important; }
+}
+
+/* On narrow phones, tighten the top bar so the Buy button never clips off-screen */
+@media (max-width: 430px) {
+  .nav-bar { padding-left: 0.9rem !important; padding-right: 0.9rem !important; }
+  .nav-bar .btn { padding: 0.5rem 0.7rem !important; font-size: 0.72rem !important; }
+  .nav-logo-text { font-size: 1.2rem !important; }
 }
 
 .container {

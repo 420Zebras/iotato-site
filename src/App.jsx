@@ -114,6 +114,7 @@ function Nav({ onConnectWallet }) {
 
   return (
     <nav
+      className="nav-bar"
       style={{
         position: "fixed",
         top: 0,
@@ -123,6 +124,7 @@ function Nav({ onConnectWallet }) {
         padding: "0.85rem 1.5rem",
         background: scrolled ? "rgba(6, 16, 10, 0.85)" : "transparent",
         backdropFilter: scrolled ? "blur(14px)" : "none",
+        WebkitBackdropFilter: scrolled ? "blur(14px)" : "none",
         borderBottom: scrolled ? "1px solid var(--line)" : "1px solid transparent",
         transition: "all 0.3s ease",
       }}
@@ -138,7 +140,7 @@ function Nav({ onConnectWallet }) {
             style={{ width: 36, height: 36, borderRadius: "50%", boxShadow: "0 0 16px rgba(232,184,74,0.4)" }}
           />
           <span
-            className="display"
+            className="display nav-logo-text"
             style={{ fontSize: "1.45rem", fontWeight: 800, color: "var(--paper)", letterSpacing: "-0.02em" }}
           >
             IOTATO
@@ -199,6 +201,8 @@ function Hero({ onPlayClick }) {
       style={{
         position: "relative",
         minHeight: "100vh",
+        // iOS Safari: dvh accounts for the dynamic URL bar so the hero isn't oversized
+        ...(typeof CSS !== "undefined" && CSS.supports?.("min-height: 100dvh") ? { minHeight: "100dvh" } : {}),
         display: "flex",
         alignItems: "center",
         overflow: "hidden",
@@ -299,6 +303,7 @@ function Hero({ onPlayClick }) {
                 fontWeight: 600,
                 marginBottom: "1.75rem",
                 backdropFilter: "blur(6px)",
+                WebkitBackdropFilter: "blur(6px)",
               }}
             >
               <span
@@ -579,6 +584,7 @@ function CAStrip() {
             background: "rgba(15, 34, 24, 0.7)",
             border: "1px solid var(--line-strong)",
             backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
             boxShadow: "0 10px 40px rgba(0, 0, 0, 0.3)",
             maxWidth: 760,
             margin: "0 auto",
@@ -817,6 +823,7 @@ function CompetitionBanner() {
           background: "linear-gradient(135deg, rgba(79,214,196,0.07), rgba(232,184,74,0.05))",
           border: "1px solid rgba(111, 191, 115, 0.28)",
           backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
         }}
       >
         <div style={{ position: "relative", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
@@ -861,6 +868,7 @@ function CompetitionBanner() {
         background: "linear-gradient(135deg, rgba(232,184,74,0.12), rgba(79,214,196,0.06))",
         border: "1px solid rgba(232, 184, 74, 0.4)",
         backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
       }}
     >
       <div
@@ -1075,6 +1083,7 @@ function Leaderboard({ entries, loading, error, latestId, personalBest, lbRef })
               border: "1px solid var(--line)",
               background: "rgba(15, 34, 24, 0.4)",
               backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
             }}
           >
             <div
@@ -1207,6 +1216,7 @@ function VideoCard({ video, prominent }) {
         background: "rgba(15, 34, 24, 0.5)",
         border: `1px solid ${prominent ? "rgba(79, 214, 196, 0.35)" : "var(--line)"}`,
         backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
         transition: "transform 0.25s, border-color 0.25s, box-shadow 0.25s",
         position: "relative",
       }}
@@ -1272,6 +1282,7 @@ function VideoCard({ video, prominent }) {
               background: "rgba(255, 255, 255, 0.1)",
               border: "2px solid rgba(255, 255, 255, 0.65)",
               backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -1297,6 +1308,7 @@ function VideoCard({ video, prominent }) {
             letterSpacing: "0.1em",
             textTransform: "uppercase",
             backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
           }}
         >
           𝕏 · Video
@@ -1416,6 +1428,7 @@ function WalletModal({ open, onClose }) {
         zIndex: 70,
         background: "rgba(0, 0, 0, 0.75)",
         backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -1544,6 +1557,7 @@ export default function App() {
 
   return (
     <>
+      <div className="aurora-bg" aria-hidden="true" />
       <Nav onConnectWallet={() => setWalletOpen(true)} />
       <FloatingMascot onBonusUnlocked={handleBonusUnlocked} />
       {bonusToast && (
