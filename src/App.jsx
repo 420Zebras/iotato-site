@@ -895,9 +895,10 @@ function CompetitionBanner() {
           <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.5rem", margin: "0 0 0.3rem", color: "var(--paper)" }}>
             The challenge is on — Top 5 win prizes 🥔
           </h3>
-          <p style={{ fontSize: "0.9rem", color: "var(--text-dim)", margin: 0, maxWidth: "46ch" }}>
-            It's live! Set your highest score, submit with your X handle, and share on X. The top 5 spuds on the
-            leaderboard when the timer hits zero take the prizes.
+          <p style={{ fontSize: "0.9rem", color: "var(--text-dim)", margin: 0, maxWidth: "48ch" }}>
+            It's live! Play Potato Dodge, set your highest score, and enter your real X handle in the game. The top 5
+            spuds on the leaderboard when the timer hits zero win. See the announcement post on {X_HANDLE} for how to be
+            eligible.
           </p>
         </div>
         <Countdown end={COMPETITION_END} />

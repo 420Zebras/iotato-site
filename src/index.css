@@ -74,6 +74,9 @@ body {
     radial-gradient(ellipse 55% 45% at 20% 95%, rgba(232, 184, 74, 0.05), transparent 60%),
     /* deep vertical base — midnight blue-green, not muddy */
     linear-gradient(180deg, #050d12 0%, #07140f 30%, #0a1812 55%, #081016 80%, #05090f 100%);
+  /* Keep the whole atmosphere fixed so it stays put while content scrolls over it. */
+  background-attachment: fixed;
+  background-size: cover;
   min-height: 100vh;
 }
 
