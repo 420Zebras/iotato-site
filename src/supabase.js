@@ -19,7 +19,7 @@ async function sbRest(table, method = "GET", body = null, query = "") {
   return res.json();
 }
 
-export async function fetchLeaderboard(limit = 50) {
+export async function fetchLeaderboard(limit = 200) {
   const rows = await sbRest(
     "leaderboard",
     "GET",
@@ -35,6 +35,26 @@ export async function fetchLeaderboard(limit = 50) {
     sessionId: r.session_id,
     date: new Date(r.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
   }));
+}
+
+/* Total number of games played (all submitted scores). Uses the Postgres count
+   exposed via the Content-Range header with Prefer: count=exact. */
+export async function fetchTotalGames() {
+  const url = `${SUPABASE_URL}/rest/v1/leaderboard?select=id&flagged=eq.false`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Prefer: "count=exact",
+      Range: "0-0",
+    },
+  });
+  if (!res.ok) throw new Error(`Supabase count: ${res.status}`);
+  // Content-Range looks like "0-0/1234" — the total is after the slash
+  const cr = res.headers.get("content-range") || "";
+  const total = parseInt(cr.split("/")[1], 10);
+  return Number.isFinite(total) ? total : null;
 }
 
 export async function insertScore(entry) {

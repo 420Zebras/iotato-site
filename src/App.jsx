@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import PotatoDodge from "./PotatoDodge.jsx";
 import FloatingMascot from "./FloatingMascot.jsx";
-import { fetchLeaderboard, insertScore } from "./supabase.js";
+import { fetchLeaderboard, insertScore, fetchTotalGames } from "./supabase.js";
 
 /* ============================================================
    IOTATO — Main site
@@ -1019,10 +1019,25 @@ function SupportSection() {
   );
 }
 
+/* Keep only each X handle's HIGHEST score, so the same name can't occupy
+   multiple leaderboard spots. Input rows are already sorted by score desc, so the
+   first time we see a handle it's their best. Case-insensitive on the handle. */
+function dedupeByHandle(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const r of rows) {
+    const key = (r.xHandle || "").trim().toLowerCase().replace(/^@/, "");
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    out.push(r);
+  }
+  return out;
+}
+
 /* ============================================================
    LEADERBOARD
    ============================================================ */
-function Leaderboard({ entries, loading, error, latestId, personalBest, lbRef }) {
+function Leaderboard({ entries, totalGames, loading, error, latestId, personalBest, lbRef }) {
   return (
     <section ref={lbRef} id="leaderboard" className="section">
       <div className="container" style={{ maxWidth: 880 }}>
@@ -1031,6 +1046,11 @@ function Leaderboard({ entries, loading, error, latestId, personalBest, lbRef })
           <div>
             <div className="eyebrow">Live · Powered by Supabase</div>
             <h2 className="section-title">Leaderboard</h2>
+            {totalGames != null && (
+              <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginTop: 4 }}>
+                🥔 {totalGames.toLocaleString()} games played
+              </div>
+            )}
           </div>
           {personalBest && (
             <div style={{ textAlign: "right" }}>
@@ -1496,6 +1516,7 @@ function WalletModal({ open, onClose }) {
    ============================================================ */
 export default function App() {
   const [entries, setEntries] = useState([]);
+  const [totalGames, setTotalGames] = useState(null);
   const [latestId, setLatestId] = useState(null);
   const [personalBest, setPersonalBest] = useState(() => loadPB());
   const [loading, setLoading] = useState(true);
@@ -1511,7 +1532,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchLeaderboard(50)
+    fetchLeaderboard(200)
       .then((rows) => {
         setEntries(rows);
         setLoading(false);
@@ -1520,6 +1541,10 @@ export default function App() {
         setError(e.message);
         setLoading(false);
       });
+    // Total games played (independent of the leaderboard rows)
+    fetchTotalGames()
+      .then((n) => setTotalGames(n))
+      .catch(() => setTotalGames(null));
   }, []);
 
   const submitScore = async ({ xHandle, score, time, level }) => {
@@ -1536,8 +1561,9 @@ export default function App() {
         plausible: true,
       });
       setLatestId(inserted.id);
-      const fresh = await fetchLeaderboard(50);
+      const fresh = await fetchLeaderboard(200);
       setEntries(fresh);
+      fetchTotalGames().then((n) => setTotalGames(n)).catch(() => {});
       if (!personalBest || score > personalBest.score) {
         const pb = { score, time, date: new Date().toLocaleDateString() };
         savePB(pb);
@@ -1598,7 +1624,8 @@ export default function App() {
       <HowToBuy />
       <GameSection gameRef={gameRef} submitScore={submitScore} personalBest={personalBest} />
       <Leaderboard
-        entries={entries}
+        entries={dedupeByHandle(entries)}
+        totalGames={totalGames}
         loading={loading}
         error={error}
         latestId={latestId}

@@ -2244,23 +2244,28 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
   const [isFs, setIsFs] = useState(false);
   const [portrait, setPortrait] = useState(false);
   const wrapRef = useRef(null);
+  // iOS Safari (iPhone) has NO Fullscreen API on non-video elements. Detect that so
+  // we can fall back to a CSS pseudo-fullscreen overlay instead.
+  const nativeFsSupported = typeof document !== "undefined" &&
+    (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
   useEffect(() => {
     setIsTouch(window.matchMedia("(hover: none), (pointer: coarse)").matches);
     const onOrient = () => setPortrait(window.innerHeight > window.innerWidth);
     onOrient();
     const onFs = () => {
-      const fs = !!document.fullscreenElement;
+      const fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
       setIsFs(fs);
-      // On phones, try to lock to landscape when entering fullscreen.
       if (fs && screen.orientation && screen.orientation.lock) {
         screen.orientation.lock("landscape").catch(() => {});
       }
     };
     document.addEventListener("fullscreenchange", onFs);
+    document.addEventListener("webkitfullscreenchange", onFs);
     window.addEventListener("resize", onOrient);
     window.addEventListener("orientationchange", onOrient);
     return () => {
       document.removeEventListener("fullscreenchange", onFs);
+      document.removeEventListener("webkitfullscreenchange", onFs);
       window.removeEventListener("resize", onOrient);
       window.removeEventListener("orientationchange", onOrient);
     };
@@ -2268,7 +2273,21 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
   const toggleFullscreen = () => {
     const el = wrapRef.current;
     if (!el) return;
-    if (!document.fullscreenElement) {
+    // iOS: no native fullscreen → toggle a CSS overlay state ourselves.
+    if (!nativeFsSupported) {
+      setIsFs((v) => {
+        const next = !v;
+        // lock body scroll while in pseudo-fullscreen
+        document.body.style.overflow = next ? "hidden" : "";
+        if (next && screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock("landscape").catch(() => {});
+        }
+        return next;
+      });
+      return;
+    }
+    const cur = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!cur) {
       (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
     } else {
       (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
@@ -2311,6 +2330,9 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
   };
 
   const lvlProg = ((hud.time % 12) / 12) * 100;
+  // On iOS (no native fullscreen) the overlay must be position:fixed to actually
+  // cover the screen; native fullscreen handles that itself.
+  const pseudoFs = isFs && !nativeFsSupported;
   return (
     <div
       ref={wrapRef}
@@ -2332,6 +2354,10 @@ function PotatoDodge({ onSubmitScore, personalBest }) {
         justifyContent: "flex-start",
         boxSizing: "border-box",
         overflow: isFs ? "hidden" : "visible",
+        // iOS pseudo-fullscreen: pin to the viewport so it actually covers the screen
+        ...(pseudoFs
+          ? { position: "fixed", inset: 0, zIndex: 9999, width: "100vw" }
+          : {}),
       }}
     >
       <div
