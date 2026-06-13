@@ -86,6 +86,24 @@ export async function fetchMostActivePlayers(limit = 10, sampleSize = 1000) {
     .slice(0, limit);
 }
 
+/* Total play time across all submitted games (in seconds). Fetches all
+   time_survived values and sums them client-side. Cheap even for thousands
+   of rows since we only request a single small column. */
+export async function fetchTotalPlayTime() {
+  const rows = await sbRest(
+    "leaderboard",
+    "GET",
+    null,
+    `?select=time_survived&flagged=eq.false&limit=10000`
+  );
+  let total = 0;
+  for (const r of rows) {
+    const t = parseFloat(r.time_survived);
+    if (Number.isFinite(t) && t > 0) total += t;
+  }
+  return total; // seconds
+}
+
 export async function insertScore(entry) {
   const [row] = await sbRest("leaderboard", "POST", {
     x_handle: entry.xHandle,

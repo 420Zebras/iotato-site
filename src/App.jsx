@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import PotatoDodge from "./PotatoDodge.jsx";
 import FloatingMascot from "./FloatingMascot.jsx";
-import { fetchLeaderboard, insertScore, fetchTotalGames, fetchMostActivePlayers } from "./supabase.js";
+import { fetchLeaderboard, insertScore, fetchTotalGames, fetchMostActivePlayers, fetchTotalPlayTime } from "./supabase.js";
 
 /* ============================================================
    IOTATO — Main site
@@ -1037,7 +1037,20 @@ function dedupeByHandle(rows) {
 /* ============================================================
    LEADERBOARD
    ============================================================ */
-function Leaderboard({ entries, mostActive, totalGames, loading, error, latestId, personalBest, lbRef }) {
+function Leaderboard({ entries, mostActive, totalGames, totalPlayTime, loading, error, latestId, personalBest, lbRef }) {
+  // Format seconds as "Xd Yh Zm" — day only shown when ≥24h, hour only when ≥1h.
+  const fmtPlayTime = (s) => {
+    if (!Number.isFinite(s) || s <= 0) return null;
+    const days = Math.floor(s / 86400);
+    const hours = Math.floor((s % 86400) / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0 || days > 0) parts.push(`${hours}h`);
+    parts.push(`${mins}m`);
+    return parts.join(" ");
+  };
+  const playTimeStr = fmtPlayTime(totalPlayTime);
   return (
     <section ref={lbRef} id="leaderboard" className="section">
       <div className="container" style={{ maxWidth: 1080 }}>
@@ -1049,6 +1062,11 @@ function Leaderboard({ entries, mostActive, totalGames, loading, error, latestId
             {totalGames != null && (
               <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginTop: 4 }}>
                 🥔 {totalGames.toLocaleString()} games played
+              </div>
+            )}
+            {playTimeStr && (
+              <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginTop: 2 }}>
+                ⏱️ {playTimeStr} of total play time
               </div>
             )}
           </div>
@@ -1617,6 +1635,7 @@ function WalletModal({ open, onClose }) {
 export default function App() {
   const [entries, setEntries] = useState([]);
   const [totalGames, setTotalGames] = useState(null);
+  const [totalPlayTime, setTotalPlayTime] = useState(null);
   const [mostActive, setMostActive] = useState([]);
   const [latestId, setLatestId] = useState(null);
   const [personalBest, setPersonalBest] = useState(() => loadPB());
@@ -1650,6 +1669,10 @@ export default function App() {
     fetchMostActivePlayers(10, 1000)
       .then((list) => setMostActive(list))
       .catch(() => setMostActive([]));
+    // Total play time across all games (in seconds)
+    fetchTotalPlayTime()
+      .then((s) => setTotalPlayTime(s))
+      .catch(() => setTotalPlayTime(null));
   }, []);
 
   const submitScore = async ({ xHandle, score, time, level }) => {
@@ -1670,6 +1693,7 @@ export default function App() {
       setEntries(fresh);
       fetchTotalGames().then((n) => setTotalGames(n)).catch(() => {});
       fetchMostActivePlayers(10, 1000).then((l) => setMostActive(l)).catch(() => {});
+      fetchTotalPlayTime().then((s) => setTotalPlayTime(s)).catch(() => {});
       if (!personalBest || score > personalBest.score) {
         const pb = { score, time, date: new Date().toLocaleDateString() };
         savePB(pb);
@@ -1733,6 +1757,7 @@ export default function App() {
         entries={dedupeByHandle(entries)}
         mostActive={mostActive}
         totalGames={totalGames}
+        totalPlayTime={totalPlayTime}
         loading={loading}
         error={error}
         latestId={latestId}
