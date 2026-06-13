@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import PotatoDodge from "./PotatoDodge.jsx";
 import FloatingMascot from "./FloatingMascot.jsx";
-import { fetchLeaderboard, insertScore, fetchTotalGames } from "./supabase.js";
+import { fetchLeaderboard, insertScore, fetchTotalGames, fetchMostActivePlayers } from "./supabase.js";
 
 /* ============================================================
    IOTATO — Main site
@@ -1037,10 +1037,10 @@ function dedupeByHandle(rows) {
 /* ============================================================
    LEADERBOARD
    ============================================================ */
-function Leaderboard({ entries, totalGames, loading, error, latestId, personalBest, lbRef }) {
+function Leaderboard({ entries, mostActive, totalGames, loading, error, latestId, personalBest, lbRef }) {
   return (
     <section ref={lbRef} id="leaderboard" className="section">
-      <div className="container" style={{ maxWidth: 880 }}>
+      <div className="container" style={{ maxWidth: 1080 }}>
         <CompetitionBanner />
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "end", gap: 12, marginBottom: "1.5rem" }}>
           <div>
@@ -1081,6 +1081,11 @@ function Leaderboard({ entries, totalGames, loading, error, latestId, personalBe
           </div>
         )}
 
+        <div
+          className="lb-two-col"
+          style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}
+        >
+          <div style={{ flex: "2 1 460px", minWidth: 0 }}>
         {loading ? (
           <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-dim)" }}>Loading leaderboard…</div>
         ) : entries.length === 0 ? (
@@ -1180,6 +1185,101 @@ function Leaderboard({ entries, totalGames, loading, error, latestId, personalBe
             })}
           </div>
         )}
+          </div>
+
+          {/* MOST ACTIVE PLAYERS CARD */}
+          <div style={{ flex: "1 1 240px", minWidth: 240 }}>
+            <div
+              style={{
+                borderRadius: 18,
+                overflow: "hidden",
+                border: "1px solid var(--line)",
+                background: "rgba(15, 34, 24, 0.4)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+              }}
+            >
+              <div
+                style={{
+                  padding: "0.85rem 1.1rem",
+                  borderBottom: "1px solid var(--line)",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "0.7rem",
+                    letterSpacing: "0.18em",
+                    textTransform: "uppercase",
+                    color: "var(--text-faint)",
+                    fontWeight: 700,
+                    marginBottom: 2,
+                  }}
+                >
+                  Most Active
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                  Top 10 by games played
+                </div>
+              </div>
+              {mostActive && mostActive.length > 0 ? (
+                mostActive.slice(0, 10).map((p, i) => {
+                  const rk = i + 1;
+                  const med = rk === 1 ? "var(--gold-1)" : rk === 2 ? "#c9c9d4" : rk === 3 ? "#c08858" : null;
+                  return (
+                    <div
+                      key={p.handle + i}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "32px 1fr auto",
+                        gap: 8,
+                        alignItems: "center",
+                        padding: "0.65rem 1.1rem",
+                        borderBottom: i < mostActive.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                        fontSize: "0.86rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: med || "var(--text-faint)",
+                          fontWeight: 700,
+                          fontSize: med ? "1rem" : "0.78rem",
+                          textAlign: "center",
+                        }}
+                      >
+                        {rk <= 3 ? ["🥇", "🥈", "🥉"][rk - 1] : rk}
+                      </div>
+                      <div
+                        style={{
+                          color: "var(--text)",
+                          fontWeight: 600,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {p.handle.startsWith("@") ? p.handle : "@" + p.handle}
+                      </div>
+                      <div
+                        style={{
+                          color: "var(--gold-1)",
+                          fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        {p.count}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ padding: "1.5rem 1.1rem", textAlign: "center", color: "var(--text-dim)", fontSize: "0.82rem" }}>
+                  {loading ? "Loading…" : "No data yet"}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
         <style>{`
           @media (max-width: 600px) {
@@ -1517,6 +1617,7 @@ function WalletModal({ open, onClose }) {
 export default function App() {
   const [entries, setEntries] = useState([]);
   const [totalGames, setTotalGames] = useState(null);
+  const [mostActive, setMostActive] = useState([]);
   const [latestId, setLatestId] = useState(null);
   const [personalBest, setPersonalBest] = useState(() => loadPB());
   const [loading, setLoading] = useState(true);
@@ -1545,6 +1646,10 @@ export default function App() {
     fetchTotalGames()
       .then((n) => setTotalGames(n))
       .catch(() => setTotalGames(null));
+    // Most active players (top 10 by games played)
+    fetchMostActivePlayers(10, 1000)
+      .then((list) => setMostActive(list))
+      .catch(() => setMostActive([]));
   }, []);
 
   const submitScore = async ({ xHandle, score, time, level }) => {
@@ -1564,6 +1669,7 @@ export default function App() {
       const fresh = await fetchLeaderboard(200);
       setEntries(fresh);
       fetchTotalGames().then((n) => setTotalGames(n)).catch(() => {});
+      fetchMostActivePlayers(10, 1000).then((l) => setMostActive(l)).catch(() => {});
       if (!personalBest || score > personalBest.score) {
         const pb = { score, time, date: new Date().toLocaleDateString() };
         savePB(pb);
@@ -1625,6 +1731,7 @@ export default function App() {
       <GameSection gameRef={gameRef} submitScore={submitScore} personalBest={personalBest} />
       <Leaderboard
         entries={dedupeByHandle(entries)}
+        mostActive={mostActive}
         totalGames={totalGames}
         loading={loading}
         error={error}

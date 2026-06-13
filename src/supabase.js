@@ -57,6 +57,35 @@ export async function fetchTotalGames() {
   return Number.isFinite(total) ? total : null;
 }
 
+/* Top players by number of games played. We fetch a wide window of recent rows
+   and aggregate client-side by x_handle (case-insensitive, ignoring '@'). Returns
+   the top N handles ordered by play count desc. */
+export async function fetchMostActivePlayers(limit = 10, sampleSize = 1000) {
+  const rows = await sbRest(
+    "leaderboard",
+    "GET",
+    null,
+    `?select=x_handle,score&flagged=eq.false&order=created_at.desc&limit=${sampleSize}`
+  );
+  const counts = new Map(); // key -> { handle (display), count, bestScore }
+  for (const r of rows) {
+    const raw = (r.x_handle || "").trim();
+    if (!raw) continue;
+    const key = raw.toLowerCase().replace(/^@/, "");
+    if (!key) continue;
+    const cur = counts.get(key);
+    if (cur) {
+      cur.count += 1;
+      if (r.score > cur.bestScore) cur.bestScore = r.score;
+    } else {
+      counts.set(key, { handle: raw, count: 1, bestScore: r.score || 0 });
+    }
+  }
+  return Array.from(counts.values())
+    .sort((a, b) => b.count - a.count || b.bestScore - a.bestScore)
+    .slice(0, limit);
+}
+
 export async function insertScore(entry) {
   const [row] = await sbRest("leaderboard", "POST", {
     x_handle: entry.xHandle,
