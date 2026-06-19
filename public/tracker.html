@@ -203,68 +203,92 @@ async function walkCheckpoints(startSeq, endSeq, onProgress) {
   return records;
 }
 
-// --- Two-phase PEAK refinement ---------------------------------------------
-// The coarse walk above samples e.g. every ~100th checkpoint over a 24h epoch.
-// That gives EXACT totals/burn (endpoints are always included) but a SMOOTHED,
-// too-low Peak TPS, because a short burst gets averaged over the ~100s gap
-// between two coarse samples. To get an accurate peak we find the busiest
-// coarse interval(s) and re-sample them at full (every-checkpoint) resolution.
+// --- PEAK refinement -------------------------------------------------------
+// HONEST NOTE ON LIMITS: a checkpoint covers a fraction of a second, and a long
+// period (e.g. an 18h epoch) has hundreds of thousands of them. Fetching every
+// one in a browser is impossible, so the coarse walk samples ~1 per ~80s. That
+// is EXACT for totals and burn (cumulative values, endpoints always included),
+// but a short TPS spike that lasts only a few seconds is invisible in an 80s
+// average — so an epoch-wide peak from sampling is only an APPROXIMATE minimum.
 //
-// Why this is correct: total tx count and burn only need the endpoints (rolling/
-// cumulative values), so coarse sampling never affects them. Only the PEAK (the
-// max instantaneous rate) needs dense data, and the max can only occur where the
-// coarse data already shows high activity — so refining the top intervals is
-// sufficient to surface the true peak without fetching the whole epoch densely.
-const REFINE_TOP_INTERVALS = 4;     // how many of the busiest coarse gaps to zoom into
-const REFINE_MAX_CP_PER_INTERVAL = 600; // cap dense fetches per interval
+// What we CAN do accurately: for a bounded time WINDOW, sample densely (or fetch
+// every checkpoint for short windows), which captures the real peak. So:
+//   • short windows  -> fetch (nearly) every checkpoint = exact peak
+//   • longer ranges  -> coarse walk + refine the busiest intervals; peak is the
+//                       best achievable estimate and is labelled approximate.
+const PARALLEL_DENSE = 50;
+// Below this many checkpoints we just fetch ALL of them (exact peak).
+const FULL_DENSITY_MAX_CP = 4000;          // ~15-20 min on mainnet
+// For refinement of larger ranges:
+const REFINE_MAX_INTERVALS = 30;           // how many candidate intervals to zoom into
+const REFINE_CP_PER_INTERVAL = 2500;       // dense fetches per refined interval
 
-// Given coarse records, return the busiest intervals (by tx-rate) to refine.
-function pickBusyIntervals(records) {
+// Pick candidate intervals to refine. We don't only take the top averages —
+// a short spike barely lifts its interval's average, so we flag EVERY interval
+// whose average rate is above (median * 1.25) AND always include the few highest,
+// then zoom into all of them. This widens the net so brief bursts aren't missed.
+function pickRefineIntervals(records) {
   const gaps = [];
   for (let i = 1; i < records.length; i++) {
     const a = records[i - 1], b = records[i];
     const dt = (b.ts - a.ts) / 1000;
     if (dt <= 0) continue;
     const rate = Number(b.ntx - a.ntx) / dt;
-    const span = Number(b.seq - a.seq); // checkpoints in this gap
-    // Only worth refining if the gap actually spans multiple checkpoints
-    if (span > 1) gaps.push({ rate, loSeq: a.seq, hiSeq: b.seq, span });
+    const span = Number(b.seq - a.seq);
+    if (span > 1) gaps.push({ rate, loSeq: a.seq, hiSeq: b.seq });
   }
-  gaps.sort((x, y) => y.rate - x.rate);
-  return gaps.slice(0, REFINE_TOP_INTERVALS);
+  if (!gaps.length) return [];
+  const sortedRates = gaps.map((g) => g.rate).sort((x, y) => x - y);
+  const median = sortedRates[Math.floor(sortedRates.length / 2)] || 0;
+  const threshold = median * 1.25;
+  const flagged = gaps.filter((g) => g.rate > threshold);
+  // Always include the absolute highest few even if the threshold filtered oddly
+  const byRate = [...gaps].sort((x, y) => y.rate - x.rate).slice(0, 8);
+  const set = new Map();
+  for (const g of [...flagged, ...byRate]) set.set(g.loSeq.toString() + '-' + g.hiSeq.toString(), g);
+  return [...set.values()].sort((x, y) => y.rate - x.rate).slice(0, REFINE_MAX_INTERVALS);
 }
 
-// Densely fetch every checkpoint in [loSeq, hiSeq] (capped) and return records.
-async function denseWalk(loSeq, hiSeq) {
+// Densely fetch checkpoints in [loSeq, hiSeq] (capped) and return records.
+async function denseWalk(loSeq, hiSeq, cap = REFINE_CP_PER_INTERVAL) {
   const span = Number(hiSeq - loSeq);
-  // If the interval is huge, stride just enough to stay under the cap but still
-  // be far denser than the coarse pass.
-  const stride = Math.max(1, Math.ceil(span / REFINE_MAX_CP_PER_INTERVAL));
+  const stride = Math.max(1, Math.ceil(span / cap));
   const seqs = [];
   for (let s = loSeq; s <= hiSeq; s += BigInt(stride)) seqs.push(s);
   if (seqs[seqs.length - 1] !== hiSeq) seqs.push(hiSeq);
   const records = [];
-  for (let i = 0; i < seqs.length; i += PARALLEL) {
-    const slice = seqs.slice(i, i + PARALLEL);
+  for (let i = 0; i < seqs.length; i += PARALLEL_DENSE) {
+    const slice = seqs.slice(i, i + PARALLEL_DENSE);
     const results = await Promise.all(slice.map((s) => getCheckpoint(s).catch(() => null)));
     for (const cp of results) { if (cp) records.push(recordFromCp(cp)); }
   }
   return records;
 }
 
-// Walk coarsely, then refine the busiest intervals for an accurate peak.
-// Returns { records (coarse, for chart/totals), refined (dense records for peak) }.
+// Walk a range and return { records (coarse, for chart/totals), refined (dense,
+// for peak), peakApprox (true if the peak is only an estimate) }.
 async function walkWithPeakRefine(startSeq, endSeq, onProgress) {
+  const span = Number(endSeq - startSeq);
+
+  // Short range: fetch (nearly) everything → exact peak, no approximation.
+  if (span <= FULL_DENSITY_MAX_CP) {
+    onProgress?.('fetching checkpoints…', null);
+    const all = await denseWalk(startSeq, endSeq, FULL_DENSITY_MAX_CP);
+    all.sort((a, b) => (a.seq < b.seq ? -1 : 1));
+    return { records: all, refined: all, peakApprox: false };
+  }
+
+  // Larger range: coarse overview + refine busiest intervals.
   const coarse = await walkCheckpoints(startSeq, endSeq, onProgress);
-  if (coarse.length < 3) return { records: coarse, refined: coarse };
-  const busy = pickBusyIntervals(coarse);
-  onProgress?.('refining peak…', null);
+  if (coarse.length < 3) return { records: coarse, refined: coarse, peakApprox: true };
+  const busy = pickRefineIntervals(coarse);
+  let done = 0;
   let refined = [];
   for (const g of busy) {
+    onProgress?.(`refining peak… ${++done}/${busy.length}`, null);
     const dense = await denseWalk(g.loSeq, g.hiSeq);
     refined = refined.concat(dense);
   }
-  // Dedupe by seq and sort
   const seen = new Set();
   const merged = [];
   for (const r of refined) {
@@ -272,7 +296,9 @@ async function walkWithPeakRefine(startSeq, endSeq, onProgress) {
     if (!seen.has(k)) { seen.add(k); merged.push(r); }
   }
   merged.sort((a, b) => (a.seq < b.seq ? -1 : 1));
-  return { records: coarse, refined: merged };
+  // The peak is still an estimate for long ranges (a few-second spike between
+  // refined samples can be missed). Flag it so the UI can show "~".
+  return { records: coarse, refined: merged, peakApprox: true };
 }
 
 // Fetch all epochs (paginated) from the INDEXER and return a Map:
@@ -333,19 +359,20 @@ async function fetchCurrentEpochStats(onProgress) {
   const latest = await getLatestSeq();                       // fullnode
   const tpsNow = await fetchTpsNow(latest);
   onProgress?.('sampling epoch checkpoints…');
-  // Coarse walk for exact totals/burn + chart, plus a dense re-sample of the
-  // busiest interval(s) so Peak TPS reflects real bursts, not a smoothed average.
-  const { records, refined } = await walkWithPeakRefine(firstCp, latest, onProgress);
+  // Coarse walk for exact totals/burn + chart, plus dense re-sampling for the peak.
+  // For a long epoch the peak is only an estimate (peakApprox=true) — a few-second
+  // spike can hide between samples; the time-window tool gives the exact peak.
+  const { records, refined, peakApprox } = await walkWithPeakRefine(firstCp, latest, onProgress);
   if (records.length < 2) {
     return { epoch, startMs, totalTxs: 0, avgTps: 0, peakTps: 0, peakTs: startMs, tpsNow,
-             durationS: 0, gasBurnedIota: 0,
+             durationS: 0, gasBurnedIota: 0, peakApprox: true,
              series: [], startTs: startMs, endTs: Date.now(), live: true };
   }
   // Burn for the in-progress epoch comes from the checkpoints' rolling computationCostBurned.
   // computeStats sums positive deltas of `comp` (= computationCostBurned) across the epoch.
   const s = computeStats(records, null, refined);
   const gasBurnedIota = s.burnedIota;
-  return { ...s, epoch, startMs, gasBurnedIota, tpsNow, live: true };
+  return { ...s, epoch, startMs, gasBurnedIota, tpsNow, peakApprox, live: true };
 }
 
 // Aggregate stats from ordered checkpoint records.
@@ -455,7 +482,7 @@ function adjusted(s, baseline) {
     spamShare,
     series: s.series.map((p) => ({ t: p.t, tps: Math.max(0, p.tps - b) })),
     peakTs: s.peakTs, startTs: s.startTs, endTs: s.endTs,
-    durationS: s.durationS, burnApprox: s.burnApprox,
+    durationS: s.durationS, burnApprox: s.burnApprox, peakApprox: s.peakApprox,
   };
 }
 
@@ -694,12 +721,13 @@ function App() {
       const endCp = await findCheckpointAtTime(endMs, BigInt(startCp.sequenceNumber), latest);
       if (!endCp) throw new Error('No checkpoint at end time');
 
-      const { records, refined } = await walkWithPeakRefine(BigInt(startCp.sequenceNumber), BigInt(endCp.sequenceNumber),
+      const { records, refined, peakApprox } = await walkWithPeakRefine(BigInt(startCp.sequenceNumber), BigInt(endCp.sequenceNumber),
         (d, t) => setProgress(t == null ? d : `sampling checkpoints… ${fmtInt(d)}/${fmtInt(t)}`));
       setProgress('fetching epoch fees…');
       const epochMap = await fetchEpochMap();
       const s = computeStats(records, epochMap, refined);
       if (!s) throw new Error('Range too small to compute');
+      s.peakApprox = peakApprox;
       s.rpcLabel = activeLabel();
       setStats(s);
       setProgress('');
@@ -753,13 +781,20 @@ function App() {
         {epochStats ? (
           <div className="cards cards5">
             <StatCard hero big label="TPS now" value={fmtTps(epochStats.tpsNow)} accent sub="current network rate" live />
-            <StatCard label="Peak TPS" value={fmtTps(epochStats.peakTps)} sub={`@ ${isoSlice(epochStats.peakTs, 19)} UTC`} />
+            <StatCard label="Peak TPS" value={(epochStats.peakApprox ? '~' : '') + fmtTps(epochStats.peakTps)} sub={epochStats.peakApprox ? 'approx · use a window below for exact' : `@ ${isoSlice(epochStats.peakTs, 19)} UTC`} />
             <StatCard label="Avg TPS" value={fmtTps(epochStats.avgTps)} sub="this epoch" />
             <StatCard label="Total TXs" value={fmtInt(epochStats.totalTxs)} sub="this epoch" />
             <StatCard label="Gas burned" value={fmtIota(epochStats.gasBurnedIota)} unit="IOTA" accent sub="fees burned so far" />
           </div>
         ) : (
           <p className="sub" style={{ margin: '4px 0 0' }}>{epochLoading ? 'Loading live epoch data…' : 'Waiting for data…'}</p>
+        )}
+        {epochStats && epochStats.peakApprox && (
+          <p className="sub" style={{ margin: '10px 0 0', fontSize: '0.78rem', opacity: 0.7 }}>
+            Note: TPS now, Avg, Total TXs and Gas burned are exact. The epoch Peak is an estimate — a
+            very short burst can hide between samples across a multi-hour epoch. For an exact peak,
+            run a time window below (short windows are measured checkpoint-by-checkpoint).
+          </p>
         )}
       </div>
 
@@ -797,7 +832,7 @@ function App() {
       {stats && adj && (
         <React.Fragment>
           <div className="cards" style={{ marginBottom: 12 }}>
-            <StatCard hero big label="Peak TPS" value={fmtTps(adj.peakTps)} accent sub={`above baseline ${baseline} · @ ${isoSlice(adj.peakTs, 19)} UTC`} />
+            <StatCard hero big label="Peak TPS" value={(adj.peakApprox ? '~' : '') + fmtTps(adj.peakTps)} accent sub={adj.peakApprox ? `above baseline ${baseline} · approx (range too long)` : `above baseline ${baseline} · @ ${isoSlice(adj.peakTs, 19)} UTC`} />
             <StatCard label="Total TXs" value={fmtInt(adj.totalTxs)} sub={`spam share · ${fmtDuration(adj.durationS)}`} />
             <StatCard label="Avg TPS" value={fmtTps(adj.avgTps)} sub={`above baseline ${baseline}`} />
             <StatCard label="Burned" value={fmtIota(adj.burnedIota)} unit="IOTA" accent sub={`spam share (${(adj.spamShare*100).toFixed(0)}%)${stats.burnApprox ? ' · edges est.' : ''}`} />
