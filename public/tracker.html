@@ -109,7 +109,6 @@ const { useState, useEffect, useRef } = React;
 // ---------- Config ----------
 const NANO_PER_IOTA = 1_000_000_000;
 const REBASED_LAUNCH_MS = Date.UTC(2025, 4, 5, 7, 0, 0);
-const PEAK_WINDOW_MS = 1000;        // sliding window for peak TPS measurement
 
 // Fullnode serves the basic iota_* read methods (checkpoints).
 // Indexer serves the iotax_* accumulation methods (getEpochs, getCurrentEpoch).
@@ -204,6 +203,78 @@ async function walkCheckpoints(startSeq, endSeq, onProgress) {
   return records;
 }
 
+// --- Two-phase PEAK refinement ---------------------------------------------
+// The coarse walk above samples e.g. every ~100th checkpoint over a 24h epoch.
+// That gives EXACT totals/burn (endpoints are always included) but a SMOOTHED,
+// too-low Peak TPS, because a short burst gets averaged over the ~100s gap
+// between two coarse samples. To get an accurate peak we find the busiest
+// coarse interval(s) and re-sample them at full (every-checkpoint) resolution.
+//
+// Why this is correct: total tx count and burn only need the endpoints (rolling/
+// cumulative values), so coarse sampling never affects them. Only the PEAK (the
+// max instantaneous rate) needs dense data, and the max can only occur where the
+// coarse data already shows high activity — so refining the top intervals is
+// sufficient to surface the true peak without fetching the whole epoch densely.
+const REFINE_TOP_INTERVALS = 4;     // how many of the busiest coarse gaps to zoom into
+const REFINE_MAX_CP_PER_INTERVAL = 600; // cap dense fetches per interval
+
+// Given coarse records, return the busiest intervals (by tx-rate) to refine.
+function pickBusyIntervals(records) {
+  const gaps = [];
+  for (let i = 1; i < records.length; i++) {
+    const a = records[i - 1], b = records[i];
+    const dt = (b.ts - a.ts) / 1000;
+    if (dt <= 0) continue;
+    const rate = Number(b.ntx - a.ntx) / dt;
+    const span = Number(b.seq - a.seq); // checkpoints in this gap
+    // Only worth refining if the gap actually spans multiple checkpoints
+    if (span > 1) gaps.push({ rate, loSeq: a.seq, hiSeq: b.seq, span });
+  }
+  gaps.sort((x, y) => y.rate - x.rate);
+  return gaps.slice(0, REFINE_TOP_INTERVALS);
+}
+
+// Densely fetch every checkpoint in [loSeq, hiSeq] (capped) and return records.
+async function denseWalk(loSeq, hiSeq) {
+  const span = Number(hiSeq - loSeq);
+  // If the interval is huge, stride just enough to stay under the cap but still
+  // be far denser than the coarse pass.
+  const stride = Math.max(1, Math.ceil(span / REFINE_MAX_CP_PER_INTERVAL));
+  const seqs = [];
+  for (let s = loSeq; s <= hiSeq; s += BigInt(stride)) seqs.push(s);
+  if (seqs[seqs.length - 1] !== hiSeq) seqs.push(hiSeq);
+  const records = [];
+  for (let i = 0; i < seqs.length; i += PARALLEL) {
+    const slice = seqs.slice(i, i + PARALLEL);
+    const results = await Promise.all(slice.map((s) => getCheckpoint(s).catch(() => null)));
+    for (const cp of results) { if (cp) records.push(recordFromCp(cp)); }
+  }
+  return records;
+}
+
+// Walk coarsely, then refine the busiest intervals for an accurate peak.
+// Returns { records (coarse, for chart/totals), refined (dense records for peak) }.
+async function walkWithPeakRefine(startSeq, endSeq, onProgress) {
+  const coarse = await walkCheckpoints(startSeq, endSeq, onProgress);
+  if (coarse.length < 3) return { records: coarse, refined: coarse };
+  const busy = pickBusyIntervals(coarse);
+  onProgress?.('refining peak…', null);
+  let refined = [];
+  for (const g of busy) {
+    const dense = await denseWalk(g.loSeq, g.hiSeq);
+    refined = refined.concat(dense);
+  }
+  // Dedupe by seq and sort
+  const seen = new Set();
+  const merged = [];
+  for (const r of refined) {
+    const k = r.seq.toString();
+    if (!seen.has(k)) { seen.add(k); merged.push(r); }
+  }
+  merged.sort((a, b) => (a.seq < b.seq ? -1 : 1));
+  return { records: coarse, refined: merged };
+}
+
 // Fetch all epochs (paginated) from the INDEXER and return a Map:
 // epochId -> { totalGasFees, mintedTokens, firstCp, startMs, endMs }
 // endOfEpochInfo.totalGasFees is the authoritative burned-fees figure for a completed epoch (nano).
@@ -262,8 +333,9 @@ async function fetchCurrentEpochStats(onProgress) {
   const latest = await getLatestSeq();                       // fullnode
   const tpsNow = await fetchTpsNow(latest);
   onProgress?.('sampling epoch checkpoints…');
-  const records = await walkCheckpoints(firstCp, latest);
-  const onMainnet = CURRENT_NETWORK === 'mainnet';
+  // Coarse walk for exact totals/burn + chart, plus a dense re-sample of the
+  // busiest interval(s) so Peak TPS reflects real bursts, not a smoothed average.
+  const { records, refined } = await walkWithPeakRefine(firstCp, latest, onProgress);
   if (records.length < 2) {
     return { epoch, startMs, totalTxs: 0, avgTps: 0, peakTps: 0, peakTs: startMs, tpsNow,
              durationS: 0, gasBurnedIota: 0,
@@ -271,31 +343,52 @@ async function fetchCurrentEpochStats(onProgress) {
   }
   // Burn for the in-progress epoch comes from the checkpoints' rolling computationCostBurned.
   // computeStats sums positive deltas of `comp` (= computationCostBurned) across the epoch.
-  const s = computeStats(records, null);
+  const s = computeStats(records, null, refined);
   const gasBurnedIota = s.burnedIota;
   return { ...s, epoch, startMs, gasBurnedIota, tpsNow, live: true };
 }
 
 // Aggregate stats from ordered checkpoint records.
-// epochMap (optional) supplies authoritative per-epoch burned fees via endOfEpochInfo.totalGasFees.
-function computeStats(records, epochMap) {
+// - records: the coarse walk (exact endpoints → exact totalTxs/burn, + chart series)
+// - epochMap (optional): authoritative per-epoch burned fees via endOfEpochInfo.totalGasFees
+// - peakRecords (optional): dense records over the busiest interval(s); if given, the
+//   peak TPS is measured from these so short bursts aren't smoothed away.
+function computeStats(records, epochMap, peakRecords) {
   if (records.length < 2) return null;
   const first = records[0], last = records[records.length - 1];
   const totalTxs = last.ntx - first.ntx;
   const durationS = (last.ts - first.ts) / 1000;
   const avgTps = durationS > 0 ? Number(totalTxs) / durationS : 0;
 
-  let peakTps = 0, peakTs = first.ts, lo = 0;
-  const series = []; // { t: ms, tps } points for the chart
-  for (let hi = 1; hi < records.length; hi++) {
-    while (records[hi].ts - records[lo].ts > PEAK_WINDOW_MS && lo < hi - 1) lo++;
-    const dt = (records[hi].ts - records[lo].ts) / 1000;
+  // ---- Chart series: built from the coarse records (overview of the whole window).
+  // Each point is the average rate over the interval between two coarse samples,
+  // plotted at the interval midpoint.
+  const series = [];
+  for (let i = 1; i < records.length; i++) {
+    const a = records[i - 1], b = records[i];
+    const dt = (b.ts - a.ts) / 1000;
     if (dt <= 0) continue;
-    const tps = Number(records[hi].ntx - records[lo].ntx) / dt;
-    // plot at the midpoint of the interval the rate represents
-    series.push({ t: (records[lo].ts + records[hi].ts) / 2, tps });
-    if (tps > peakTps) { peakTps = tps; peakTs = records[hi].ts; }
+    const tps = Number(b.ntx - a.ntx) / dt;
+    series.push({ t: (a.ts + b.ts) / 2, tps });
   }
+
+  // ---- Peak TPS: the highest instantaneous rate between two CONSECUTIVE checkpoints.
+  // Use the dense peakRecords when available (busiest interval re-sampled at full
+  // resolution); otherwise fall back to the coarse records. Measuring between
+  // consecutive checkpoints (which are sub-second apart on mainnet) gives the true
+  // short-term peak instead of an average smeared across a long sampling gap.
+  const peakSrc = (peakRecords && peakRecords.length >= 2) ? peakRecords : records;
+  let peakTps = 0, peakTs = first.ts;
+  for (let i = 1; i < peakSrc.length; i++) {
+    const a = peakSrc[i - 1], b = peakSrc[i];
+    const dt = (b.ts - a.ts) / 1000;
+    if (dt <= 0) continue;
+    // Guard against absurd values from a 1-checkpoint gap with a near-zero dt.
+    const tps = Number(b.ntx - a.ntx) / dt;
+    if (tps > peakTps) { peakTps = tps; peakTs = b.ts; }
+  }
+  // Peak can never be below the window average (a part can't be less than the whole's mean).
+  if (peakTps < avgTps) peakTps = avgTps;
 
   // ---- Burn: total gas fees burned over the window ----
   // Group walked checkpoints by epoch so we know which epochs the window touches
@@ -601,11 +694,11 @@ function App() {
       const endCp = await findCheckpointAtTime(endMs, BigInt(startCp.sequenceNumber), latest);
       if (!endCp) throw new Error('No checkpoint at end time');
 
-      const records = await walkCheckpoints(BigInt(startCp.sequenceNumber), BigInt(endCp.sequenceNumber),
-        (d, t) => setProgress(`sampling checkpoints… ${fmtInt(d)}/${fmtInt(t)}`));
+      const { records, refined } = await walkWithPeakRefine(BigInt(startCp.sequenceNumber), BigInt(endCp.sequenceNumber),
+        (d, t) => setProgress(t == null ? d : `sampling checkpoints… ${fmtInt(d)}/${fmtInt(t)}`));
       setProgress('fetching epoch fees…');
       const epochMap = await fetchEpochMap();
-      const s = computeStats(records, epochMap);
+      const s = computeStats(records, epochMap, refined);
       if (!s) throw new Error('Range too small to compute');
       s.rpcLabel = activeLabel();
       setStats(s);
