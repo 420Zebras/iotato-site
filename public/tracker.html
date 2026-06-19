@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IOTA Mainnet · Spam Event Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  :root {
+    --bg: #09090b; --panel: rgba(24,24,27,0.4); --border: #27272a;
+    --text: #f4f4f5; --muted: #71717a; --dim: #52525b;
+    --amber: #f59e0b; --amber-light: #fbbf24; --green: #4ade80; --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 40px 20px; }
+  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; color: rgba(245,158,11,0.8); margin-bottom: 8px; }
+  h1 { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; color: #fafafa; }
+  .sub { font-size: 14px; color: #a1a1aa; margin-top: 8px; max-width: 560px; line-height: 1.5; }
+  .sub code { color: #d4d4d8; font-size: 13px; }
+  .panel { border: 1px solid var(--border); background: var(--panel); border-radius: 10px; padding: 20px; }
+  .mb4 { margin-bottom: 16px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+  label { display: block; }
+  .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); }
+  input[type="datetime-local"] { margin-top: 4px; width: 100%; background: #09090b; border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; font-size: 13px; color: var(--text); font-family: ui-monospace, monospace; }
+  input[type="datetime-local"]:focus { outline: none; border-color: rgba(245,158,11,0.6); }
+  input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+  input:disabled { opacity: 0.4; }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+  .baseline-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .baseline-input { width: 72px; background: #09090b; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 13px; color: var(--text); }
+  .baseline-input:focus { outline: none; border-color: rgba(245,158,11,0.6); }
+  .baseline-hint { font-size: 11px; color: var(--dim); font-family: ui-monospace, monospace; }
+  .netbar { display: flex; gap: 6px; margin-bottom: 24px; }
+  .nettab { flex: 0 0 auto; padding: 7px 18px; font-size: 13px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; font-family: ui-monospace, monospace; text-transform: capitalize; transition: all 0.15s; }
+  .nettab:hover { border-color: rgba(245,158,11,0.5); color: var(--amber-light); }
+  .nettab.active { border-color: var(--amber); color: #09090b; background: var(--amber); font-weight: 600; }
+  .livepanel { border-color: rgba(245,158,11,0.25); }
+  .livedot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); margin-right: 5px; vertical-align: middle; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+  .cards5 { grid-template-columns: repeat(5, 1fr); }
+  @media (max-width: 720px) { .cards5 { grid-template-columns: 1fr 1fr 1fr; } }
+  @media (max-width: 480px) { .cards5 { grid-template-columns: 1fr 1fr; } }
+  .preset { padding: 5px 12px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); background: transparent; cursor: pointer; font-family: ui-monospace, monospace; transition: all 0.15s; }
+  .preset:hover { border-color: rgba(245,158,11,0.6); color: var(--amber-light); }
+  .modes { display: flex; gap: 8px; margin-bottom: 16px; }
+  .mode { flex: 1; padding: 8px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; font-family: ui-monospace, monospace; transition: all 0.15s; }
+  .mode.active { border-color: var(--amber); color: var(--amber-light); background: rgba(245,158,11,0.08); }
+  .go { width: 100%; color: #09090b; font-weight: 500; border: none; padding: 11px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.15s; background: var(--amber); }
+  .go:hover { background: var(--amber-light); }
+  .go:disabled { background: #27272a; color: #52525b; cursor: default; }
+  .go.stop { background: var(--red); color: #1a0606; }
+  .go.stop:hover { background: #fca5a5; }
+  .err { border: 1px solid rgba(127,29,29,0.5); background: rgba(69,10,10,0.3); color: #fca5a5; padding: 12px 16px; border-radius: 6px; font-size: 13px; font-family: ui-monospace, monospace; }
+  .livebar { display: flex; align-items: center; gap: 8px; font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 560px) { .cards { grid-template-columns: 1fr 1fr; } }
+  .card { border: 1px solid var(--border); background: var(--panel); border-radius: 10px; padding: 16px; transition: border-color 0.15s, transform 0.15s; }
+  .card:hover { border-color: #3f3f46; transform: translateY(-1px); }
+  .card.hero { border-color: rgba(245,158,11,0.45); background: linear-gradient(160deg, rgba(245,158,11,0.10), rgba(245,158,11,0.02)); box-shadow: inset 0 0 24px rgba(245,158,11,0.06); }
+  .card.hero:hover { border-color: rgba(245,158,11,0.7); }
+  .card .lbl { margin-bottom: 8px; }
+  .val { font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; font-family: ui-monospace, monospace; color: #fafafa; line-height: 1.05; }
+  .val.amber { color: var(--amber-light); }
+  .val.big { font-size: 34px; letter-spacing: -0.01em; }
+  .unit { font-size: 12px; color: var(--dim); font-family: ui-monospace, monospace; margin-left: 4px; }
+  .cardsub { font-size: 11px; color: var(--dim); font-family: ui-monospace, monospace; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .charthead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .charthead .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); font-family: ui-monospace, monospace; }
+  .chartpeak { font-size: 11px; color: var(--amber-light); font-family: ui-monospace, monospace; }
+  .axislabel { fill: #52525b; font-size: 10px; font-family: ui-monospace, monospace; }
+  .tipval { fill: #fbbf24; font-size: 11px; font-family: ui-monospace, monospace; font-weight: 600; }
+  .tiptime { fill: #a1a1aa; font-size: 9px; font-family: ui-monospace, monospace; }
+  .timeline { font-family: ui-monospace, monospace; font-size: 12px; }
+  .timeline .row { display: flex; justify-content: space-between; }
+  .bar { position: relative; height: 4px; background: #27272a; border-radius: 4px; margin: 8px 0; }
+  .bar > div.fill { position: absolute; inset: 0; background: linear-gradient(to right, rgba(245,158,11,0.3), var(--amber)); border-radius: 4px; }
+  .peakmark { position: absolute; top: -3px; width: 2px; height: 10px; background: var(--amber-light); box-shadow: 0 0 6px var(--amber-light); }
+  .actions { display: flex; gap: 8px; margin: 24px 0; }
+  .actbtn { flex: 1; border: 1px solid var(--border); background: transparent; color: #d4d4d8; font-size: 13px; padding: 9px; border-radius: 6px; cursor: pointer; font-family: ui-monospace, monospace; transition: all 0.15s; }
+  .actbtn:hover { border-color: rgba(245,158,11,0.6); color: var(--amber-light); }
+  details { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+  summary { cursor: pointer; }
+  summary:hover { color: #d4d4d8; }
+  details .body { margin-top: 12px; line-height: 1.6; color: #a1a1aa; }
+  details .body p { margin-bottom: 8px; }
+  details code { color: var(--amber-light); }
+  details b { color: #e4e4e7; font-weight: 500; }
+  .footer { text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: #3f3f46; font-family: ui-monospace, monospace; margin-top: 48px; }
+  .footlink { color: #52525b; text-decoration: none; transition: color 0.15s; }
+  .footlink:hover { color: var(--amber-light); }
+  .muted-dim { color: var(--dim); }
+  .c500 { color: var(--muted); }
+  .gap-top { margin-top: 4px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ---------- Config ----------
+const NANO_PER_IOTA = 1_000_000_000;
+const REBASED_LAUNCH_MS = Date.UTC(2025, 4, 5, 7, 0, 0);
+const PEAK_WINDOW_MS = 1000;        // sliding window for peak TPS measurement
+
+// Fullnode serves the basic iota_* read methods (checkpoints).
+// Indexer serves the iotax_* accumulation methods (getEpochs, getCurrentEpoch).
+// They live at different hosts per network: https://api.NETWORK.iota.cafe / https://indexer.NETWORK.iota.cafe
+const NETWORKS = ['mainnet', 'testnet', 'devnet'];
+
+// All RPC goes through our own serverless proxy at /api/iota?network=NETWORK.
+// The proxy runs server-side, so there is no browser CORS problem and no
+// dependency on third-party CORS proxies. The proxy itself routes iotax_*
+// methods to the indexer host and everything else to the fullnode host.
+let CURRENT_NETWORK = 'mainnet';
+function setNetwork(network) {
+  CURRENT_NETWORK = network;
+}
+
+async function rpc(method, params = []) {
+  const res = await fetch(`/api/iota?network=${encodeURIComponent(CURRENT_NETWORK)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || 'RPC error');
+  return data.result;
+}
+function resetPools() { /* no-op: single proxy endpoint, nothing to reset */ }
+const activeLabel = () => 'proxy';
+
+const getCheckpoint = (seq) => rpc('iota_getCheckpoint', [String(seq)]);
+const getLatestSeq = async () => BigInt(await rpc('iota_getLatestCheckpointSequenceNumber'));
+
+async function findCheckpointAtTime(targetMs, lo, hi) {
+  let result = null;
+  while (lo <= hi) {
+    const mid = (lo + hi) / 2n;
+    const cp = await getCheckpoint(mid);
+    if (BigInt(cp.timestampMs) >= BigInt(targetMs)) { result = cp; hi = mid - 1n; }
+    else { lo = mid + 1n; }
+  }
+  return result;
+}
+
+// Sample checkpoints between two sequence numbers.
+// For small ranges this fetches every checkpoint; for large ranges it strides
+// to keep total fetches near TARGET_SAMPLES, trading a little peak precision for speed.
+// First and last checkpoints are always included so endpoint totals stay exact.
+const TARGET_SAMPLES = 800;
+const PARALLEL = 40;
+
+function buildSampleSeqs(startSeq, endSeq) {
+  const span = Number(endSeq - startSeq); // number of gaps
+  if (span <= 0) return [startSeq];
+  const stride = Math.max(1, Math.ceil((span + 1) / TARGET_SAMPLES));
+  const seqs = [];
+  for (let s = startSeq; s <= endSeq; s += BigInt(stride)) seqs.push(s);
+  if (seqs[seqs.length - 1] !== endSeq) seqs.push(endSeq); // always include the end
+  return seqs;
+}
+
+function recordFromCp(cp) {
+  const g = cp.epochRollingGasCostSummary || cp.rollingGasSummary || {};
+  // The BURNED amount is computationCostBurned: only the reference-gas-price portion of
+  // computation is burned. Tips (computation above RGP) go to validators; storage is a
+  // 100%-refundable deposit and is never burned. Fall back to computationCost only if the
+  // burned field is absent (older nodes / Sui-style responses).
+  const burned = g.computationCostBurned != null
+    ? BigInt(g.computationCostBurned)
+    : BigInt(g.computationCost ?? 0);
+  return {
+    seq: BigInt(cp.sequenceNumber),
+    ts: Number(cp.timestampMs),
+    ntx: BigInt(cp.networkTotalTransactions),
+    epoch: Number(cp.epoch),
+    comp: burned, // cumulative burned-so-far within the epoch (rolling)
+  };
+}
+
+async function walkCheckpoints(startSeq, endSeq, onProgress) {
+  const seqs = buildSampleSeqs(startSeq, endSeq);
+  const total = seqs.length;
+  const records = [];
+  let done = 0;
+  for (let i = 0; i < seqs.length; i += PARALLEL) {
+    const slice = seqs.slice(i, i + PARALLEL);
+    const results = await Promise.all(slice.map((s) => getCheckpoint(s).catch(() => null)));
+    for (const cp of results) { if (cp) records.push(recordFromCp(cp)); }
+    done += slice.length;
+    onProgress?.(done, total);
+  }
+  records.sort((a, b) => (a.seq < b.seq ? -1 : 1));
+  return records;
+}
+
+// Fetch all epochs (paginated) from the INDEXER and return a Map:
+// epochId -> { totalGasFees, mintedTokens, firstCp, startMs, endMs }
+// endOfEpochInfo.totalGasFees is the authoritative burned-fees figure for a completed epoch (nano).
+// mintedTokensAmount is the fixed per-epoch issuance, used for the net-burn figure.
+// Returns null if the indexer is unreachable — caller then falls back to checkpoint-delta burn.
+async function fetchEpochMap(onProgress) {
+  try {
+    const map = new Map();
+    let cursor = null;
+    for (let page = 0; page < 80; page++) { // safety cap
+      const res = await rpc('iotax_getEpochs', [cursor, 50, false]);
+      const data = res?.data || [];
+      for (const e of data) {
+        const id = Number(e.epoch);
+        const eoe = e.endOfEpochInfo || null;
+        map.set(id, {
+          totalGasFees: eoe ? BigInt(eoe.totalGasFees ?? 0) : null, // null = epoch still in progress
+          mintedTokens: eoe ? BigInt(eoe.mintedTokensAmount ?? eoe.totalStakeRewardsDistributed ?? 0) : null,
+          burntTokens: eoe && eoe.burntTokensAmount != null ? BigInt(eoe.burntTokensAmount) : null,
+          firstCp: BigInt(e.firstCheckpointId ?? 0),
+          startMs: Number(e.epochStartTimestamp ?? 0),
+          endMs: eoe ? Number(eoe.epochEndTimestamp ?? 0) : null,
+        });
+      }
+      onProgress?.(map.size);
+      if (!res?.hasNextPage) break;
+      cursor = res.nextCursor;
+    }
+    return map;
+  } catch (e) {
+    return null; // indexer unavailable; burn will use checkpoint-delta fallback
+  }
+}
+
+// Current network TPS: measured over the most recent ~30 checkpoints (a few seconds of
+// activity), matching how the official explorer shows a live TPS reading.
+async function fetchTpsNow(latestSeq) {
+  const N = 30;
+  const seqs = [];
+  for (let i = 0; i < N; i++) { const s = latestSeq - BigInt(i); if (s >= 0n) seqs.push(s); }
+  const cps = await Promise.all(seqs.map((s) => getCheckpoint(s).catch(() => null)));
+  const recs = cps.filter(Boolean).map((cp) => ({ ts: Number(cp.timestampMs), ntx: BigInt(cp.networkTotalTransactions) }));
+  recs.sort((a, b) => a.ts - b.ts);
+  if (recs.length < 2) return 0;
+  const dt = (recs[recs.length - 1].ts - recs[0].ts) / 1000;
+  if (dt <= 0) return 0;
+  return Number(recs[recs.length - 1].ntx - recs[0].ntx) / dt;
+}
+
+async function fetchCurrentEpochStats(onProgress) {
+  const cur = await rpc('iotax_getCurrentEpoch');           // indexer
+  const epoch = Number(cur.epoch);
+  const firstCp = BigInt(cur.firstCheckpointId ?? 0);
+  const startMs = Number(cur.epochStartTimestamp ?? 0);
+
+  const latest = await getLatestSeq();                       // fullnode
+  const tpsNow = await fetchTpsNow(latest);
+  onProgress?.('sampling epoch checkpoints…');
+  const records = await walkCheckpoints(firstCp, latest);
+  const onMainnet = CURRENT_NETWORK === 'mainnet';
+  if (records.length < 2) {
+    return { epoch, startMs, totalTxs: 0, avgTps: 0, peakTps: 0, peakTs: startMs, tpsNow,
+             durationS: 0, gasBurnedIota: 0,
+             series: [], startTs: startMs, endTs: Date.now(), live: true };
+  }
+  // Burn for the in-progress epoch comes from the checkpoints' rolling computationCostBurned.
+  // computeStats sums positive deltas of `comp` (= computationCostBurned) across the epoch.
+  const s = computeStats(records, null);
+  const gasBurnedIota = s.burnedIota;
+  return { ...s, epoch, startMs, gasBurnedIota, tpsNow, live: true };
+}
+
+// Aggregate stats from ordered checkpoint records.
+// epochMap (optional) supplies authoritative per-epoch burned fees via endOfEpochInfo.totalGasFees.
+function computeStats(records, epochMap) {
+  if (records.length < 2) return null;
+  const first = records[0], last = records[records.length - 1];
+  const totalTxs = last.ntx - first.ntx;
+  const durationS = (last.ts - first.ts) / 1000;
+  const avgTps = durationS > 0 ? Number(totalTxs) / durationS : 0;
+
+  let peakTps = 0, peakTs = first.ts, lo = 0;
+  const series = []; // { t: ms, tps } points for the chart
+  for (let hi = 1; hi < records.length; hi++) {
+    while (records[hi].ts - records[lo].ts > PEAK_WINDOW_MS && lo < hi - 1) lo++;
+    const dt = (records[hi].ts - records[lo].ts) / 1000;
+    if (dt <= 0) continue;
+    const tps = Number(records[hi].ntx - records[lo].ntx) / dt;
+    // plot at the midpoint of the interval the rate represents
+    series.push({ t: (records[lo].ts + records[hi].ts) / 2, tps });
+    if (tps > peakTps) { peakTps = tps; peakTs = records[hi].ts; }
+  }
+
+  // ---- Burn: total gas fees burned over the window ----
+  // Group walked checkpoints by epoch so we know which epochs the window touches
+  // and how much of each epoch is covered.
+  const byEpoch = new Map();
+  for (const r of records) {
+    if (!byEpoch.has(r.epoch)) byEpoch.set(r.epoch, []);
+    byEpoch.get(r.epoch).push(r);
+  }
+
+  let burnedNano = 0n;
+  let burnApprox = false;
+  const touchedEpochs = [...byEpoch.keys()].sort((a, b) => a - b);
+  const firstEpoch = touchedEpochs[0];
+  const lastEpoch = touchedEpochs[touchedEpochs.length - 1];
+
+  for (const ep of touchedEpochs) {
+    const recs = byEpoch.get(ep); // already time-ordered (records were sorted)
+    const epInfo = epochMap?.get(ep);
+    const firstWalked = recs[0];
+    const lastWalked = recs[recs.length - 1];
+
+    // Interior epochs (neither the first nor the last the window touches) lie entirely
+    // inside the window, so use the authoritative whole-epoch burned fees.
+    const isInterior = ep !== firstEpoch && ep !== lastEpoch;
+    const epochCompleted = epInfo && epInfo.totalGasFees != null;
+
+    if (isInterior && epochCompleted) {
+      burnedNano += epInfo.totalGasFees;
+    } else {
+      // Edge epoch (or no indexer data): reconstruct the covered slice from rolling-summary deltas.
+      // epochRollingGasCostSummary is cumulative WITHIN the epoch, so the delta between the last
+      // and first walked checkpoint of this epoch ≈ fees burned in the covered slice.
+      const delta = lastWalked.comp - firstWalked.comp;
+      if (delta > 0n) burnedNano += delta;
+      burnApprox = true;
+    }
+  }
+
+  return {
+    totalTxs, avgTps, peakTps, peakTs, durationS,
+    burnedIota: Number(burnedNano) / NANO_PER_IOTA,
+    burnApprox,
+    series,
+    startTs: first.ts, endTs: last.ts,
+  };
+}
+
+// Subtract a constant TPS baseline (normal network traffic) from all stats,
+// so the cards/chart show only what the spam added above baseline.
+// Rates (peak/avg/series) lose `baseline` TPS directly; counts and burn are
+// reduced by the share of transactions the baseline would have produced.
+function adjusted(s, baseline) {
+  const b = Math.max(0, baseline || 0);
+  const baselineTxs = b * s.durationS;                       // TXs the baseline alone would produce
+  const totalTxsNum = Number(s.totalTxs);
+  const spamTxs = Math.max(0, totalTxsNum - baselineTxs);    // TXs above baseline = the spam
+  const spamShare = totalTxsNum > 0 ? spamTxs / totalTxsNum : 0;
+  return {
+    peakTps: Math.max(0, s.peakTps - b),
+    avgTps: Math.max(0, s.avgTps - b),
+    totalTxs: Math.round(spamTxs),
+    burnedIota: s.burnedIota * spamShare,                    // burn ≈ linear in tx count
+    spamShare,
+    series: s.series.map((p) => ({ t: p.t, tps: Math.max(0, p.tps - b) })),
+    peakTs: s.peakTs, startTs: s.startTs, endTs: s.endTs,
+    durationS: s.durationS, burnApprox: s.burnApprox,
+  };
+}
+
+// ---------- Formatting ----------
+const fmtInt = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+const fmtTps = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+const fmtIota = (n) => {
+  const sign = n < 0 ? '-' : '';
+  const a = Math.abs(n);
+  const body = a >= 1e6 ? (a/1e6).toFixed(2)+'M' : a >= 1e3 ? (a/1e3).toFixed(2)+'K' : a >= 1 ? a.toFixed(2) : a.toFixed(4);
+  return sign + body;
+};
+const fmtDuration = (s) => { const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60); const p=[]; if(d)p.push(d+'d'); if(h)p.push(h+'h'); if(m)p.push(m+'m'); if(!d&&!h)p.push(sec+'s'); return p.join(' '); };
+const toLocalInput = (d) => { const p=(n)=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+const isoSlice = (ms, len) => new Date(Number(ms)).toISOString().replace('T',' ').slice(0, len);
+const fmtClock = (ms) => new Date(Number(ms)).toISOString().slice(11, 16); // HH:MM UTC
+const fmtClockSec = (ms) => new Date(Number(ms)).toISOString().slice(11, 19); // HH:MM:SS UTC
+const fmtAxisTps = (n) => n >= 1000 ? (n/1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : Math.round(n).toString();
+
+function StatCard({ label, value, sub, unit, accent, hero, big, live }) {
+  return (
+    <div className={'card' + (hero ? ' hero' : '')}>
+      <div className="lbl">{live && <span className="livedot"></span>}{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline' }}>
+        <div className={'val' + (accent ? ' amber' : '') + (big ? ' big' : '')}>{value}</div>
+        {unit && <div className="unit">{unit}</div>}
+      </div>
+      {sub && <div className="cardsub">{sub}</div>}
+    </div>
+  );
+}
+
+function TpsChart({ series, startTs, endTs, peakTps, peakTs, avgTps, baseline }) {
+  const [hover, setHover] = React.useState(null);
+  if (!series || series.length < 2) return null;
+
+  // viewBox coordinate space (responsive via width=100%)
+  const W = 760, H = 280;
+  const padL = 52, padR = 16, padT = 18, padB = 30;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const t0 = startTs, t1 = endTs;
+  const tSpan = Math.max(1, t1 - t0);
+  const maxTps = Math.max(peakTps, ...series.map((p) => p.tps)) * 1.12 || 1;
+
+  const x = (t) => padL + ((t - t0) / tSpan) * plotW;
+  const y = (v) => padT + plotH - (v / maxTps) * plotH;
+
+  // build smoothed path (Catmull-Rom → bezier) for the line, and a matching area
+  const pts = series.map((p) => ({ px: x(p.t), py: y(p.tps) }));
+  function smoothPath(points) {
+    if (points.length < 2) return '';
+    let d = `M ${points[0].px.toFixed(2)} ${points[0].py.toFixed(2)}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i - 1] || points[i];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[i + 2] || p2;
+      const c1x = p1.px + (p2.px - p0.px) / 6;
+      const c1y = p1.py + (p2.py - p0.py) / 6;
+      const c2x = p2.px - (p3.px - p1.px) / 6;
+      const c2y = p2.py - (p3.py - p1.py) / 6;
+      d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ${p2.px.toFixed(2)} ${p2.py.toFixed(2)}`;
+    }
+    return d;
+  }
+  const linePath = smoothPath(pts);
+  const areaPath = linePath + ` L ${pts[pts.length-1].px.toFixed(2)} ${(padT+plotH).toFixed(2)} L ${pts[0].px.toFixed(2)} ${(padT+plotH).toFixed(2)} Z`;
+
+  // y gridlines
+  const yTicks = 4;
+  const gridY = Array.from({ length: yTicks + 1 }, (_, i) => (maxTps / yTicks) * i);
+  // x ticks (5 across)
+  const xTicks = 5;
+  const gridX = Array.from({ length: xTicks + 1 }, (_, i) => t0 + (tSpan / xTicks) * i);
+
+  function onMove(e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const relX = ((e.clientX - rect.left) / rect.width) * W;
+    if (relX < padL || relX > W - padR) { setHover(null); return; }
+    const tHover = t0 + ((relX - padL) / plotW) * tSpan;
+    // nearest sample
+    let best = series[0], bestD = Infinity;
+    for (const p of series) { const d = Math.abs(p.t - tHover); if (d < bestD) { bestD = d; best = p; } }
+    setHover(best);
+  }
+
+  const peakX = x(peakTs), peakY = y(peakTps);
+  const avgY = y(avgTps);
+
+  return (
+    <div className="panel mb4" style={{ paddingBottom: 8 }}>
+      <div className="charthead">
+        <span className="lbl">TPS above baseline{baseline ? ` (−${baseline})` : ''}</span>
+        <span className="chartpeak">peak {fmtTps(peakTps)} · avg {fmtTps(avgTps)}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', cursor: 'crosshair' }}
+           onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        <defs>
+          <linearGradient id="tpsfill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+
+        {/* y gridlines + labels */}
+        {gridY.map((v, i) => (
+          <g key={'gy'+i}>
+            <line x1={padL} y1={y(v)} x2={W - padR} y2={y(v)} stroke="#27272a" strokeWidth="1" />
+            <text x={padL - 8} y={y(v) + 3} textAnchor="end" className="axislabel">{fmtAxisTps(v)}</text>
+          </g>
+        ))}
+
+        {/* x time labels */}
+        {gridX.map((t, i) => (
+          <text key={'gx'+i} x={x(t)} y={H - 10} textAnchor={i === 0 ? 'start' : i === xTicks ? 'end' : 'middle'} className="axislabel">{fmtClock(t)}</text>
+        ))}
+
+        {/* avg line */}
+        <line x1={padL} y1={avgY} x2={W - padR} y2={avgY} stroke="#52525b" strokeWidth="1" strokeDasharray="3 4" />
+
+        {/* area + line */}
+        <path d={areaPath} fill="url(#tpsfill)" />
+        <path d={linePath} fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinejoin="round" />
+
+        {/* peak marker */}
+        <line x1={peakX} y1={padT} x2={peakX} y2={padT + plotH} stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
+        <circle cx={peakX} cy={peakY} r="3.5" fill="#fbbf24" stroke="#09090b" strokeWidth="1.5" />
+
+        {/* hover crosshair + tooltip */}
+        {hover && (
+          <g>
+            <line x1={x(hover.t)} y1={padT} x2={x(hover.t)} y2={padT + plotH} stroke="#a1a1aa" strokeWidth="1" opacity="0.4" />
+            <circle cx={x(hover.t)} cy={y(hover.tps)} r="3.5" fill="#fafafa" />
+            <g transform={`translate(${Math.min(Math.max(x(hover.t), padL + 54), W - padR - 54)}, ${padT + 12})`}>
+              <rect x="-52" y="-12" width="104" height="34" rx="4" fill="#18181b" stroke="#3f3f46" strokeWidth="1" />
+              <text x="0" y="0" textAnchor="middle" className="tipval">{fmtTps(hover.tps)} TPS</text>
+              <text x="0" y="13" textAnchor="middle" className="tiptime">{fmtClockSec(hover.t)} UTC</text>
+            </g>
+          </g>
+        )}
+      </svg>
+    </div>
+  );
+}
+
+function App() {
+  const now = new Date();
+  const [startTime, setStartTime] = useState(toLocalInput(new Date(now.getTime() - 36e5)));
+  const [endTime, setEndTime] = useState(toLocalInput(now));
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [baseline, setBaseline] = useState(22);
+  const [network, setNetworkState] = useState('mainnet');
+  const [epochStats, setEpochStats] = useState(null);
+  const [epochLoading, setEpochLoading] = useState(false);
+  const [epochErr, setEpochErr] = useState(null);
+  const [epochTick, setEpochTick] = useState(null);
+  const epochTimer = useRef(null);
+
+  function changeNetwork(n) {
+    if (n === network) return;
+    setNetwork(n);            // module-level pool switch
+    setNetworkState(n);
+    setStats(null); setError(null);
+    // epoch panel auto-reloads via the network-dependent effect
+  }
+
+  async function loadEpoch() {
+    setEpochErr(null);
+    try {
+      const es = await fetchCurrentEpochStats(); // silent: no shared progress writes
+      es.rpcLabel = activeLabel();
+      setEpochStats(es);
+      setEpochTick(new Date());
+    } catch (e) { setEpochErr(e.message); }
+    finally { setEpochLoading(false); }
+  }
+
+  // Cheap, frequent update of just the current TPS reading (~30 checkpoint fetches).
+  async function refreshTpsNow() {
+    try {
+      const latest = await getLatestSeq();
+      const tps = await fetchTpsNow(latest);
+      setEpochStats((prev) => prev ? { ...prev, tpsNow: tps } : prev);
+      setEpochTick(new Date());
+    } catch (e) { /* keep last good value */ }
+  }
+
+  // Live epoch panel: full walk on mount + network change, then refresh the heavy
+  // epoch-wide stats every 60s and the light TPS-now reading every 10s. No button needed.
+  useEffect(() => {
+    let cancelled = false;
+    setEpochLoading(true);
+    setEpochStats(null);
+    loadEpoch(); // immediate full load
+    const heavy = setInterval(() => { if (!cancelled) loadEpoch(); }, 60000);
+    const light = setInterval(() => { if (!cancelled) refreshTpsNow(); }, 10000);
+    epochTimer.current = heavy;
+    return () => { cancelled = true; clearInterval(heavy); clearInterval(light); };
+  // eslint-disable-next-line
+  }, [network]);
+
+  const applyPreset = (hours) => {
+    const end = new Date();
+    setStartTime(toLocalInput(new Date(end.getTime() - hours * 36e5)));
+    setEndTime(toLocalInput(end));
+  };
+
+  function validateStart() {
+    const startMs = new Date(startTime).getTime();
+    if (Number.isNaN(startMs)) throw new Error('Invalid start date');
+    if (network === 'mainnet' && startMs < REBASED_LAUNCH_MS) throw new Error('Start must be after Rebased launch (May 5, 2025 07:00 UTC)');
+    return startMs;
+  }
+
+  async function run() {
+    setLoading(true); setError(null); setStats(null); setProgress(''); resetPools();
+    try {
+      const startMs = validateStart();
+      const endMs = new Date(endTime).getTime();
+      if (Number.isNaN(endMs)) throw new Error('Invalid end date');
+      if (startMs >= endMs) throw new Error('Start must be before end');
+      if (endMs > Date.now() + 60000) throw new Error('End time is in the future');
+
+      setProgress('connecting…');
+      const latest = await getLatestSeq();
+      setProgress('locating start…');
+      const startCp = await findCheckpointAtTime(startMs, 0n, latest);
+      if (!startCp) throw new Error('No checkpoint at start time');
+      setProgress('locating end…');
+      const endCp = await findCheckpointAtTime(endMs, BigInt(startCp.sequenceNumber), latest);
+      if (!endCp) throw new Error('No checkpoint at end time');
+
+      const records = await walkCheckpoints(BigInt(startCp.sequenceNumber), BigInt(endCp.sequenceNumber),
+        (d, t) => setProgress(`sampling checkpoints… ${fmtInt(d)}/${fmtInt(t)}`));
+      setProgress('fetching epoch fees…');
+      const epochMap = await fetchEpochMap();
+      const s = computeStats(records, epochMap);
+      if (!s) throw new Error('Range too small to compute');
+      s.rpcLabel = activeLabel();
+      setStats(s);
+      setProgress('');
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  }
+
+  function copySummary() {
+    if (!stats) return;
+    const a = adjusted(stats, baseline);
+    const lines = [
+      `IOTA ${network} · spam event (baseline ${baseline} TPS removed)`,
+      `${isoSlice(a.startTs, 16)} → ${isoSlice(a.endTs, 16)} UTC (${fmtDuration(a.durationS)})`,
+      `Peak TPS:    ${fmtInt(a.peakTps)}  @ ${isoSlice(a.peakTs, 19)} UTC`,
+      `Avg TPS:     ${fmtInt(a.avgTps)}`,
+      `Total TXs:   ${fmtInt(a.totalTxs)} (spam share)`,
+      `Burned:      ${fmtIota(a.burnedIota)} IOTA (spam share)`,
+    ];
+    navigator.clipboard.writeText(lines.join('\n'));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  const adj = stats ? adjusted(stats, baseline) : null;
+
+  return (
+    <div className="wrap">
+      <div className="netbar">
+        {NETWORKS.map((n) => (
+          <button key={n} className={'nettab' + (network === n ? ' active' : '')} onClick={() => changeNetwork(n)}>{n}</button>
+        ))}
+      </div>
+
+      <div style={{ marginBottom: 32 }}>
+        <div className="eyebrow mono">iota.{network} · spam event</div>
+        <h1>Throughput tracker</h1>
+        <p className="sub">Pick a time window and analyze it. Shows peak TPS, transactions, and IOTA burned on IOTA {network} between time x and time y — minus a configurable baseline, so only the change caused by the spam is visible.</p>
+      </div>
+
+      {/* ---- Live current-epoch panel (auto-runs, refreshes every 10s) ---- */}
+      <div className="panel mb4 livepanel">
+        <div className="charthead" style={{ marginBottom: 12 }}>
+          <span className="lbl"><span className="livedot"></span> live · current epoch{epochStats ? ` #${epochStats.epoch}` : ''}</span>
+          <span className="chartpeak">
+            {epochStats
+              ? `running ${fmtDuration(epochStats.durationS)}${epochTick ? ` · upd ${epochTick.toLocaleTimeString()}` : ''}`
+              : (epochLoading ? 'loading…' : '—')}
+          </span>
+        </div>
+        {epochErr && <div className="err" style={{ marginBottom: 12 }}>{epochErr}</div>}
+        {epochStats ? (
+          <div className="cards cards5">
+            <StatCard hero big label="TPS now" value={fmtTps(epochStats.tpsNow)} accent sub="current network rate" live />
+            <StatCard label="Peak TPS" value={fmtTps(epochStats.peakTps)} sub={`@ ${isoSlice(epochStats.peakTs, 19)} UTC`} />
+            <StatCard label="Avg TPS" value={fmtTps(epochStats.avgTps)} sub="this epoch" />
+            <StatCard label="Total TXs" value={fmtInt(epochStats.totalTxs)} sub="this epoch" />
+            <StatCard label="Gas burned" value={fmtIota(epochStats.gasBurnedIota)} unit="IOTA" accent sub="fees burned so far" />
+          </div>
+        ) : (
+          <p className="sub" style={{ margin: '4px 0 0' }}>{epochLoading ? 'Loading live epoch data…' : 'Waiting for data…'}</p>
+        )}
+      </div>
+
+      <div className="panel mb4">
+        <div className="grid2" style={{ marginBottom: 16 }}>
+          <label>
+            <span className="lbl mono">From (time x)</span>
+            <input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+          </label>
+          <label>
+            <span className="lbl mono">To (time y)</span>
+            <input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+          </label>
+        </div>
+
+        <div className="presets">
+          {[{l:'15m',h:0.25},{l:'1h',h:1},{l:'6h',h:6},{l:'24h',h:24}].map((p) => (
+            <button key={p.l} className="preset" onClick={() => applyPreset(p.h)}>last {p.l}</button>
+          ))}
+        </div>
+
+        <div className="baseline-row">
+          <span className="lbl mono">Subtract baseline (TPS)</span>
+          <input type="number" min="0" step="1" value={baseline}
+                 onChange={(e) => setBaseline(Math.max(0, Number(e.target.value) || 0))}
+                 className="baseline-input mono" />
+          <span className="baseline-hint">normal network traffic — subtracted from all stats</span>
+        </div>
+
+        <button className="go" onClick={run} disabled={loading}>{loading ? (progress || 'working…') : 'fetch stats'}</button>
+      </div>
+
+      {error && <div className="err mb4">{error}</div>}
+
+      {stats && adj && (
+        <React.Fragment>
+          <div className="cards" style={{ marginBottom: 12 }}>
+            <StatCard hero big label="Peak TPS" value={fmtTps(adj.peakTps)} accent sub={`above baseline ${baseline} · @ ${isoSlice(adj.peakTs, 19)} UTC`} />
+            <StatCard label="Total TXs" value={fmtInt(adj.totalTxs)} sub={`spam share · ${fmtDuration(adj.durationS)}`} />
+            <StatCard label="Avg TPS" value={fmtTps(adj.avgTps)} sub={`above baseline ${baseline}`} />
+            <StatCard label="Burned" value={fmtIota(adj.burnedIota)} unit="IOTA" accent sub={`spam share (${(adj.spamShare*100).toFixed(0)}%)${stats.burnApprox ? ' · edges est.' : ''}`} />
+          </div>
+
+          <TpsChart series={adj.series} startTs={adj.startTs} endTs={adj.endTs} peakTps={adj.peakTps} peakTs={adj.peakTs} avgTps={adj.avgTps} baseline={baseline} />
+
+          <div className="actions">
+            <button className="actbtn" onClick={copySummary}>{copied ? 'copied ✓' : 'copy summary'}</button>
+            <button className="actbtn" onClick={run}>re-walk</button>
+          </div>
+
+          <details>
+            <summary>methodology</summary>
+            <div className="body">
+              <p><b>Baseline</b> — the configured value ({baseline} TPS) is treated as normal network traffic and subtracted from all stats. Peak and Avg lose {baseline} TPS directly; Total TXs and Burn are reduced by the share the baseline would have produced over the window (baseline TXs = {baseline} × window duration).</p>
+              <p><b>Peak TPS &amp; chart</b> — checkpoints are sampled across the range (every checkpoint for short windows, strided for long ones) and TPS is measured between consecutive samples, then minus baseline. The dot marks the peak.</p>
+              <p><b>Total TXs / Avg TPS</b> — from the <code>networkTotalTransactions</code> delta, then with the baseline share removed.</p>
+              <p><b>Burned</b> — actual fees burned. Only the reference-gas-price portion of computation is burned (field <code>computationCostBurned</code>); validator tips and the refundable storage deposit are excluded. Full epochs inside the window use the authoritative <code>endOfEpochInfo.totalGasFees</code> from the indexer; the partial epochs at the window edges use the <code>computationCostBurned</code> delta across the covered checkpoints. The figure is then scaled by the transactions' spam share. Burn is roughly linear in transaction count, since the fee is fixed per epoch by the Reference Gas Price — so more burn comes mainly from more TXs, not more expensive ones.</p>
+              <p><b>TPS now</b> — current network rate, measured over the most recent ~30 checkpoints (a few seconds of activity). This matches the live TPS shown on the official IOTA explorer.</p>
+              <p><b>Gas burned</b> — the raw transaction fees destroyed this epoch (<code>computationCostBurned</code> only: the reference-gas-price portion of computation). Validator tips and the refundable storage deposit are excluded. Note that explorers may report a different "burned" figure — some show the protocol's net <code>burnt_tokens_amount</code>, which offsets burn against the fixed per-epoch mint and can read 0 or negative — so a given epoch's burn can look different between tools.</p>
+              <p><b>Live panel</b> — auto-starts on load and refreshes every 10s. Figures cover the in-progress epoch from its first checkpoint to the latest; gas burned is live, net burn is an estimate until the epoch closes.</p>
+            </div>
+          </details>
+        </React.Fragment>
+      )}
+
+      <div className="footer">
+        {network} · rpc {stats?.rpcLabel || epochStats?.rpcLabel || 'auto-fallback'} · <a href={`https://explorer.iota.org/?network=${network}`} target="_blank" rel="noopener noreferrer" className="footlink">official explorer ↗</a>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

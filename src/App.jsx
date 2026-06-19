@@ -1520,6 +1520,9 @@ function Footer() {
               <a href={TOKENLABS_BUY_URL} target="_blank" rel="noopener noreferrer" style={{ color: "var(--text-dim)" }}>
                 🧪 $TAT on TokenLabs
               </a>
+              <a href="/tracker" style={{ color: "var(--text-dim)" }}>
+                📊 Network Stats Tracker
+              </a>
             </div>
           </div>
 
